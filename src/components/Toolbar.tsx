@@ -6,11 +6,12 @@ interface Props {
   onRemoveSelected: () => void;
   dirtyCount: number;
   selectedCount: number;
+  children?: React.ReactNode;
 }
 
 export function Toolbar({
   onOpenFiles, onOpenFolder, onSaveAll, onDiscardAll,
-  onRemoveSelected, dirtyCount, selectedCount,
+  onRemoveSelected, dirtyCount, selectedCount, children,
 }: Props) {
   return (
     <div className="toolbar">
@@ -25,8 +26,9 @@ export function Toolbar({
       <button onClick={onDiscardAll} disabled={dirtyCount === 0} className="discard">
         Alles verwerfen{dirtyCount > 0 ? ` (${dirtyCount})` : ""}
       </button>
+      {children}
       {selectedCount > 0 && (
-        <button onClick={onRemoveSelected} className="remove">
+        <button onClick={onRemoveSelected} className="remove" style={{ marginLeft: "auto" }}>
           {selectedCount} entfernen
         </button>
       )}

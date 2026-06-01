@@ -6,16 +6,20 @@ import { FileTable } from "./components/FileTable";
 import { MetaEditor } from "./components/MetaEditor";
 import { PageEditor } from "./components/PageEditor";
 import { Toolbar } from "./components/Toolbar";
+import { BulkOpsMenu } from "./components/BulkOpsMenu";
+import { NumberingModal } from "./components/NumberingModal";
 import "./App.css";
 
 type Panel = "meta" | "pages";
 
 export default function App() {
   const { files, selected } = useStore();
-  const [panel, setPanel] = useState<Panel>("meta");
+  const [panel, setPanel]               = useState<Panel>("meta");
+  const [numberingOpen, setNumberingOpen] = useState(false);
 
   const selectedFiles = files.filter((f) => selected.has(f.id));
-  const singleFile = selectedFiles.length === 1 ? selectedFiles[0] : null;
+  const singleFile    = selectedFiles.length === 1 ? selectedFiles[0] : null;
+  const dirtyCount    = files.filter((f) => f.dirty).length;
 
   const handleOpenFiles = useCallback(async () => {
     const result = await open({
@@ -39,8 +43,6 @@ export default function App() {
     }
   }, []);
 
-  const dirtyCount = files.filter((f) => f.dirty).length;
-
   return (
     <div className="app">
       <Toolbar
@@ -51,7 +53,15 @@ export default function App() {
         dirtyCount={dirtyCount}
         selectedCount={selected.size}
         onRemoveSelected={() => store.removeFiles([...selected])}
-      />
+      >
+        {selectedFiles.length > 1 && (
+          <BulkOpsMenu
+            selectedIds={[...selected]}
+            onOpenNumbering={() => setNumberingOpen(true)}
+          />
+        )}
+      </Toolbar>
+
       <div className="workspace">
         <FileTable />
         <div className="detail-panel">
@@ -73,12 +83,8 @@ export default function App() {
                   Pages
                 </button>
               </div>
-              {panel === "meta" && (
-                <MetaEditor files={selectedFiles} />
-              )}
-              {panel === "pages" && singleFile && (
-                <PageEditor file={singleFile} />
-              )}
+              {panel === "meta"  && <MetaEditor files={selectedFiles} />}
+              {panel === "pages" && singleFile && <PageEditor file={singleFile} />}
             </>
           ) : (
             <div className="empty-state">
@@ -88,6 +94,13 @@ export default function App() {
           )}
         </div>
       </div>
+
+      {numberingOpen && (
+        <NumberingModal
+          files={selectedFiles}
+          onClose={() => setNumberingOpen(false)}
+        />
+      )}
     </div>
   );
 }

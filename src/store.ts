@@ -91,6 +91,26 @@ class Store {
     this.notify();
   }
 
+  applyTransform(ids: string[], transform: (file: ComicFile) => Partial<ComicMeta>) {
+    ids.forEach((id) => {
+      const file = this.files.find((f) => f.id === id);
+      if (!file) return;
+      file.meta = { ...file.meta, ...transform(file) };
+      file.dirty = true;
+    });
+    this.notify();
+  }
+
+  applyNumbering(orderedIds: string[], startNumber: number) {
+    orderedIds.forEach((id, i) => {
+      const file = this.files.find((f) => f.id === id);
+      if (!file) return;
+      file.meta = { ...file.meta, number: String(startNumber + i) };
+      file.dirty = true;
+    });
+    this.notify();
+  }
+
   discardAll() {
     this.files.filter((f) => f.dirty).forEach((file) => {
       file.meta = { ...file.originalMeta };
