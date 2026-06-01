@@ -44,6 +44,11 @@
 .panel-tabs .tab:hover:not(.active):not(:disabled) {
   background: var(--row-hover);
 }
+.panel-tabs .tab:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  color: var(--text-muted);
+}
 
 .empty-state {
   flex: 1;

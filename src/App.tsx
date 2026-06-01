@@ -36,6 +36,9 @@ export default function App() {
   const singleFile    = selectedFiles.length === 1 ? selectedFiles[0] : null;
   const dirtyCount    = files.filter((f) => f.dirty).length;
 
+  // Auto-switch to meta when multi-select makes pages tab unavailable
+  if (panel === "pages" && !singleFile) setPanel("meta");
+
   const handleOpenFiles = useCallback(async () => {
     const result = await open({
       multiple: true,
