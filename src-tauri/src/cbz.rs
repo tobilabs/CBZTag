@@ -218,6 +218,40 @@ pub fn add_pages(path: &str, image_paths: &[String]) -> Result<Vec<PageInfo>> {
     Ok(added)
 }
 
+/// Extracts one image from the CBZ and returns it as a base64 data URL.
+/// Only the matching entry is read — the rest of the archive is untouched.
+pub fn get_page_thumbnail(cbz_path: &str, filename: &str) -> Result<String> {
+    let file = File::open(cbz_path).context("Datei öffnen")?;
+    let mut archive = ZipArchive::new(file).context("ZIP öffnen")?;
+
+    // Find full entry name by basename
+    let entry_name: Option<String> = (0..archive.len()).find_map(|i| {
+        let e = archive.by_index(i).ok()?;
+        let name = e.name().to_owned();
+        let base = name.rsplit('/').next().unwrap_or(&name).to_owned();
+        if base == filename { Some(name) } else { None }
+    });
+    let entry_name = entry_name
+        .ok_or_else(|| anyhow::anyhow!("Seite nicht gefunden: {}", filename))?;
+
+    let mut entry = archive.by_name(&entry_name)?;
+    let mut bytes = Vec::new();
+    entry.read_to_end(&mut bytes)?;
+
+    let ext = filename.rsplit('.').next().unwrap_or("jpg").to_lowercase();
+    let mime = match ext.as_str() {
+        "png"  => "image/png",
+        "gif"  => "image/gif",
+        "webp" => "image/webp",
+        "avif" => "image/avif",
+        _      => "image/jpeg",
+    };
+
+    use base64::Engine;
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    Ok(format!("data:{};base64,{}", mime, b64))
+}
+
 // ── ZIP helpers ───────────────────────────────────────────────────────────────
 
 fn copy_entry<R: Read + Seek>(src: &mut ZipArchive<R>, dst: &mut ZipWriter<File>, name: &str) -> Result<()> {

@@ -310,6 +310,7 @@ name = "cbztag"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "quick-xml 0.36.2",
  "serde",
  "serde_json",
