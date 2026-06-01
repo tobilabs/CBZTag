@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import type { DirEntry } from "@tauri-apps/plugin-fs";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readDir } from "@tauri-apps/plugin-fs";
 import { store, useStore } from "./store";
@@ -9,6 +10,20 @@ import { Toolbar } from "./components/Toolbar";
 import { BulkOpsMenu } from "./components/BulkOpsMenu";
 import { NumberingModal } from "./components/NumberingModal";
 import "./App.css";
+
+async function collectCbzFiles(dirPath: string): Promise<string[]> {
+  const entries: DirEntry[] = await readDir(dirPath);
+  const results: string[] = [];
+  for (const entry of entries) {
+    const fullPath = `${dirPath}/${entry.name}`;
+    if (entry.isDirectory) {
+      results.push(...await collectCbzFiles(fullPath));
+    } else if (entry.name?.toLowerCase().endsWith(".cbz")) {
+      results.push(fullPath);
+    }
+  }
+  return results;
+}
 
 type Panel = "meta" | "pages";
 
@@ -35,10 +50,7 @@ export default function App() {
   const handleOpenFolder = useCallback(async () => {
     const result = await open({ directory: true });
     if (typeof result === "string") {
-      const entries = await readDir(result);
-      const cbzPaths = entries
-        .filter((e) => e.name?.toLowerCase().endsWith(".cbz"))
-        .map((e) => `${result}/${e.name}`);
+      const cbzPaths = await collectCbzFiles(result);
       if (cbzPaths.length > 0) await store.openFiles(cbzPaths);
     }
   }, []);
