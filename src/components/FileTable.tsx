@@ -116,6 +116,7 @@ export function FileTable() {
           cursor: pointer;
           border-bottom: 1px solid var(--border);
           font-size: 12px;
+          user-select: none;
         }
         .file-row:hover { background: var(--row-hover); }
         .file-row.selected { background: var(--row-selected); }
