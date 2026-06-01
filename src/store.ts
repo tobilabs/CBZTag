@@ -163,6 +163,11 @@ class Store {
     this.notify();
   }
 
+  setSelected(ids: Set<string>) {
+    this.selected = ids;
+    this.notify();
+  }
+
   toggleSelected(id: string, multi: boolean) {
     if (multi) {
       const next = new Set(this.selected);
