@@ -54,7 +54,7 @@ export default function App() {
         selectedCount={selected.size}
         onRemoveSelected={() => store.removeFiles([...selected])}
       >
-        {selectedFiles.length > 1 && (
+        {selectedFiles.length > 0 && (
           <BulkOpsMenu
             selectedIds={[...selected]}
             onOpenNumbering={() => setNumberingOpen(true)}

@@ -59,7 +59,7 @@ export function BulkOpsMenu({ selectedIds, onOpenNumbering }: Props) {
   return (
     <div className="bulk-menu-wrap" ref={ref}>
       <button onClick={() => setOpen((v) => !v)} className="bulk-menu-btn">
-        Bulk-Operationen ▾
+        Operationen ▾
       </button>
       {open && (
         <div className="bulk-menu-dropdown">
@@ -81,8 +81,10 @@ export function BulkOpsMenu({ selectedIds, onOpenNumbering }: Props) {
           <button
             className="bulk-menu-item bulk-menu-item--accent"
             onClick={() => { setOpen(false); onOpenNumbering(); }}
+            title={selectedIds.length < 2 ? "Mindestens 2 Comics auswählen" : ""}
+            disabled={selectedIds.length < 2}
           >
-            Fortlaufende Nummerierung…
+            Bulk: Fortlaufende Nummerierung…
           </button>
         </div>
       )}
