@@ -33,9 +33,30 @@ export interface ComicMeta {
   communityRating?: string;
 }
 
+export type PageType =
+  | "Story"
+  | "FrontCover"
+  | "InnerCover"
+  | "BackCover"
+  | "Roundup"
+  | "Advertisement"
+  | "Editorial"
+  | "Letters"
+  | "Preview"
+  | "Other"
+  | "Deleted";
+
+export const PAGE_TYPES: PageType[] = [
+  "Story", "FrontCover", "InnerCover", "BackCover",
+  "Roundup", "Advertisement", "Editorial", "Letters",
+  "Preview", "Other", "Deleted",
+];
+
 export interface PageEntry {
   filename: string;
   index: number;
+  pageType?: PageType;
+  doublePage?: boolean;
 }
 
 export interface ComicFile {

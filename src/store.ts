@@ -1,11 +1,17 @@
 import { invoke } from "@tauri-apps/api/core";
-import { ComicFile, ComicMeta, BulkEdit } from "./types";
+import { ComicFile, ComicMeta, BulkEdit, PageEntry } from "./types";
 
 type Listener = () => void;
+
+export interface StoreSnapshot {
+  files: ComicFile[];
+  selected: Set<string>;
+}
 
 class Store {
   files: ComicFile[] = [];
   selected: Set<string> = new Set();
+  snapshot: StoreSnapshot = { files: this.files, selected: this.selected };
   private listeners: Set<Listener> = new Set();
 
   subscribe(fn: Listener) {
@@ -14,6 +20,7 @@ class Store {
   }
 
   private notify() {
+    this.snapshot = { files: this.files, selected: this.selected };
     this.listeners.forEach((fn) => fn());
   }
 
@@ -36,11 +43,11 @@ class Store {
     await Promise.all(
       newEntries.map(async (entry) => {
         try {
-          const result: { meta: ComicMeta; pages: string[] } = await invoke("load_cbz", {
+          const result: { meta: ComicMeta; pages: PageEntry[] } = await invoke("load_cbz", {
             path: entry.path,
           });
           entry.meta = result.meta;
-          entry.pages = result.pages.map((filename, index) => ({ filename, index }));
+          entry.pages = result.pages;
           entry.loading = false;
         } catch (e) {
           entry.loading = false;
@@ -82,13 +89,49 @@ class Store {
     this.notify();
   }
 
+  updatePage(id: string, pageIndex: number, patch: Partial<import("./types").PageEntry>) {
+    const file = this.files.find((f) => f.id === id);
+    if (!file) return;
+    file.pages = file.pages.map((p, i) =>
+      i === pageIndex ? { ...p, ...patch } : p
+    );
+    file.dirty = true;
+    this.notify();
+  }
+
+  removePages(id: string, pageIndices: number[]) {
+    const file = this.files.find((f) => f.id === id);
+    if (!file) return;
+    const set = new Set(pageIndices);
+    file.pages = file.pages
+      .filter((_, i) => !set.has(i))
+      .map((p, i) => ({ ...p, index: i }));
+    file.dirty = true;
+    this.notify();
+  }
+
+  async addPages(id: string, imagePaths: string[]) {
+    const file = this.files.find((f) => f.id === id);
+    if (!file) return;
+    const added: import("./types").PageEntry[] = await invoke("add_pages", {
+      path: file.path,
+      imagePaths,
+    });
+    file.pages = [
+      ...file.pages,
+      ...added.map((p, i) => ({ ...p, index: file.pages.length + i })),
+    ];
+    file.dirty = true;
+    this.notify();
+  }
+
   async saveFile(id: string) {
     const file = this.files.find((f) => f.id === id);
     if (!file || !file.dirty) return;
     await invoke("save_cbz", {
       path: file.path,
       meta: file.meta,
-      pageOrder: file.pages.map((p) => p.filename),
+      pages: file.pages,
     });
     file.dirty = false;
     this.notify();
@@ -132,6 +175,6 @@ import { useSyncExternalStore } from "react";
 export function useStore() {
   return useSyncExternalStore(
     (fn) => store.subscribe(fn),
-    () => ({ files: store.files, selected: store.selected })
+    () => store.snapshot
   );
 }
