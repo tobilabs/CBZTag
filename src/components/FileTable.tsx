@@ -231,7 +231,7 @@ export function FileTable() {
           display: flex; align-items: center; padding: 0 8px; height: 28px;
           background: var(--surface); border-bottom: 1px solid var(--border);
           font-size: 11px; font-weight: 600; color: var(--text-muted);
-          user-select: none; flex-shrink: 0; overflow: hidden;
+          user-select: none; flex-shrink: 0; overflow: visible; position: relative; z-index: 10;
         }
         .file-table-body { flex: 1; overflow-y: auto; overflow-x: auto; }
         .col { padding: 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
