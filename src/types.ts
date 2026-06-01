@@ -1,10 +1,18 @@
+// Fields in schema sequence order (ComicInfo v2.0)
 export interface ComicMeta {
   title?: string;
   series?: string;
   number?: string;
-  volume?: string;
-  year?: string;
-  month?: string;
+  count?: string;           // xs:int — total books in series
+  volume?: string;          // xs:int
+  alternateSeries?: string;
+  alternateNumber?: string;
+  alternateCount?: string;  // xs:int
+  summary?: string;
+  notes?: string;
+  year?: string;            // xs:int
+  month?: string;           // xs:int
+  day?: string;             // xs:int
   writer?: string;
   penciller?: string;
   inker?: string;
@@ -12,37 +20,41 @@ export interface ComicMeta {
   letterer?: string;
   coverArtist?: string;
   editor?: string;
+  translator?: string;
   publisher?: string;
   imprint?: string;
   genre?: string;
+  tags?: string;
   web?: string;
-  pageCount?: string;
+  // pageCount is derived from pages.len() — not user-editable
   languageISO?: string;
   format?: string;
-  blackAndWhite?: string;
-  manga?: string;
+  blackAndWhite?: "Unknown" | "No" | "Yes";
+  manga?: "Unknown" | "No" | "Yes" | "YesAndRightToLeft";
   characters?: string;
   teams?: string;
   locations?: string;
+  scanInformation?: string;
   storyArc?: string;
+  storyArcNumber?: string;
   seriesGroup?: string;
   ageRating?: string;
-  summary?: string;
-  notes?: string;
-  scanInformation?: string;
-  communityRating?: string;
+  // Pages block handled separately
+  communityRating?: string; // xs:decimal 0.0–5.0
+  mainCharacterOrTeam?: string;
+  review?: string;
 }
 
 export type PageType =
-  | "Story"
   | "FrontCover"
   | "InnerCover"
-  | "BackCover"
   | "Roundup"
+  | "Story"
   | "Advertisement"
   | "Editorial"
   | "Letters"
   | "Preview"
+  | "BackCover"
   | "Other"
   | "Deleted";
 

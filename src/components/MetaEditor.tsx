@@ -7,82 +7,99 @@ interface FieldDef {
   label: string;
   multiline?: boolean;
   options?: string[];
+  hint?: string;
 }
 
+// Fields in ComicInfo v2.0 schema sequence order
 const FIELDS: FieldDef[] = [
-  { key: "title", label: "Titel" },
-  { key: "series", label: "Serie" },
-  { key: "number", label: "Nummer" },
-  { key: "volume", label: "Band" },
-  { key: "year", label: "Jahr" },
-  { key: "month", label: "Monat" },
-  { key: "publisher", label: "Verlag" },
-  { key: "imprint", label: "Imprint" },
-  { key: "writer", label: "Autor" },
-  { key: "penciller", label: "Zeichner" },
-  { key: "inker", label: "Inker" },
-  { key: "colorist", label: "Colorist" },
-  { key: "letterer", label: "Letterer" },
-  { key: "coverArtist", label: "Cover-Künstler" },
-  { key: "editor", label: "Editor" },
-  { key: "genre", label: "Genre" },
-  { key: "languageISO", label: "Sprache (ISO)" },
-  { key: "format", label: "Format" },
-  { key: "ageRating", label: "Altersfreigabe", options: ["Unknown", "Adults Only 18+", "Early Childhood", "Everyone", "Everyone 10+", "G", "Kids to Adults", "M", "MA15+", "Mature 17+", "PG", "R18+", "Rating Pending", "Teen", "X18+"] },
-  { key: "blackAndWhite", label: "Schwarz/Weiß", options: ["Unknown", "Yes", "No"] },
-  { key: "manga", label: "Manga", options: ["Unknown", "Yes", "YesAndRightToLeft", "No"] },
-  { key: "storyArc", label: "Story Arc" },
-  { key: "seriesGroup", label: "Seriengruppe" },
-  { key: "characters", label: "Charaktere" },
-  { key: "teams", label: "Teams" },
-  { key: "locations", label: "Orte" },
-  { key: "web", label: "Web-URL" },
-  { key: "communityRating", label: "Bewertung" },
-  { key: "summary", label: "Zusammenfassung", multiline: true },
-  { key: "notes", label: "Notizen", multiline: true },
-  { key: "scanInformation", label: "Scan-Info", multiline: true },
+  { key: "title",               label: "Titel" },
+  { key: "series",              label: "Serie" },
+  { key: "number",              label: "Nummer" },
+  { key: "count",               label: "Gesamt (Count)", hint: "Ganzzahl" },
+  { key: "volume",              label: "Band (Volume)",  hint: "Ganzzahl" },
+  { key: "alternateSeries",     label: "Alternate Series" },
+  { key: "alternateNumber",     label: "Alternate Number" },
+  { key: "alternateCount",      label: "Alternate Count", hint: "Ganzzahl" },
+  { key: "summary",             label: "Zusammenfassung", multiline: true },
+  { key: "notes",               label: "Notizen",         multiline: true },
+  { key: "year",                label: "Jahr",  hint: "Ganzzahl" },
+  { key: "month",               label: "Monat", hint: "1–12" },
+  { key: "day",                 label: "Tag",   hint: "1–31" },
+  { key: "writer",              label: "Autor (Writer)" },
+  { key: "penciller",           label: "Zeichner (Penciller)" },
+  { key: "inker",               label: "Inker" },
+  { key: "colorist",            label: "Colorist" },
+  { key: "letterer",            label: "Letterer" },
+  { key: "coverArtist",         label: "Cover-Künstler" },
+  { key: "editor",              label: "Editor" },
+  { key: "translator",          label: "Übersetzer (Translator)" },
+  { key: "publisher",           label: "Verlag (Publisher)" },
+  { key: "imprint",             label: "Imprint" },
+  { key: "genre",               label: "Genre", hint: "Komma-getrennt" },
+  { key: "tags",                label: "Tags",  hint: "Komma-getrennt" },
+  { key: "web",                 label: "Web-URL" },
+  { key: "languageISO",         label: "Sprache (BCP 47)", hint: "z.B. de, en, fr" },
+  { key: "format",              label: "Format", hint: "z.B. TBP, HC, Web, Digital" },
+  {
+    key: "blackAndWhite",
+    label: "Schwarz/Weiß",
+    options: ["Unknown", "No", "Yes"],
+  },
+  {
+    key: "manga",
+    label: "Manga",
+    options: ["Unknown", "No", "Yes", "YesAndRightToLeft"],
+  },
+  { key: "characters",          label: "Charaktere", hint: "Komma-getrennt" },
+  { key: "teams",               label: "Teams",      hint: "Komma-getrennt" },
+  { key: "locations",           label: "Orte",       hint: "Komma-getrennt" },
+  { key: "scanInformation",     label: "Scan-Info",  multiline: true },
+  { key: "storyArc",            label: "Story Arc",  hint: "Komma-getrennt" },
+  { key: "storyArcNumber",      label: "Story Arc Nummer", hint: "Komma-getrennt" },
+  { key: "seriesGroup",         label: "Seriengruppe", hint: "Komma-getrennt" },
+  {
+    key: "ageRating",
+    label: "Altersfreigabe",
+    options: [
+      "Unknown", "Adults Only 18+", "Early Childhood", "Everyone",
+      "Everyone 10+", "G", "Kids to Adults", "M", "MA15+",
+      "Mature 17+", "PG", "R18+", "Rating Pending", "Teen", "X18+",
+    ],
+  },
+  { key: "communityRating",     label: "Community-Bewertung", hint: "0.0–5.0" },
+  { key: "mainCharacterOrTeam", label: "Hauptcharakter/-team" },
+  { key: "review",              label: "Rezension", multiline: true },
 ];
 
-function getMixedValue(files: ComicFile[], key: keyof ComicMeta): string {
-  const values = files.map((f) => f.meta[key] ?? "");
-  const unique = new Set(values);
-  return unique.size === 1 ? (values[0] ?? "") : "";
+function getMixed(files: ComicFile[], key: keyof ComicMeta): string {
+  const vals = files.map((f) => f.meta[key] ?? "");
+  return new Set(vals).size === 1 ? (vals[0] ?? "") : "";
 }
 
 function isMixed(files: ComicFile[], key: keyof ComicMeta): boolean {
-  const values = files.map((f) => f.meta[key] ?? "");
-  return new Set(values).size > 1;
+  return new Set(files.map((f) => f.meta[key] ?? "")).size > 1;
 }
 
-interface Props {
-  files: ComicFile[];
-}
+interface Props { files: ComicFile[] }
 
 export function MetaEditor({ files }: Props) {
   const isMulti = files.length > 1;
-  const [localMeta, setLocalMeta] = useState<Partial<ComicMeta>>({});
+  const [local, setLocal] = useState<Partial<ComicMeta>>({});
 
+  // Recompute local state when selection changes
+  const selectionKey = files.map((f) => f.id).join(",");
   useEffect(() => {
-    const meta: Partial<ComicMeta> = {};
+    const m: Partial<ComicMeta> = {};
     FIELDS.forEach(({ key }) => {
-      if (!isMixed(files, key)) {
-        meta[key] = getMixedValue(files, key);
-      }
+      if (!isMixed(files, key)) (m as Record<string, string>)[key] = getMixed(files, key);
     });
-    setLocalMeta(meta);
-  }, [files.map((f) => f.id).join(",")]);
+    setLocal(m);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectionKey]);
 
   function handleChange(key: keyof ComicMeta, value: string) {
-    setLocalMeta((m) => ({ ...m, [key]: value }));
-    if (isMulti) {
-      files.forEach((f) => store.updateMeta(f.id, { [key]: value }));
-    } else {
-      store.updateMeta(files[0].id, { [key]: value });
-    }
-  }
-
-  function handleSave() {
-    files.forEach((f) => store.saveFile(f.id));
+    setLocal((m) => ({ ...m, [key]: value }));
+    files.forEach((f) => store.updateMeta(f.id, { [key]: value }));
   }
 
   const dirty = files.some((f) => f.dirty);
@@ -90,27 +107,29 @@ export function MetaEditor({ files }: Props) {
   return (
     <div className="meta-editor">
       <div className="meta-header">
-        <span>{isMulti ? `${files.length} Dateien ausgewählt` : files[0].filename}</span>
-        <button className="primary" onClick={handleSave} disabled={!dirty}>
+        <span className="meta-title">
+          {isMulti ? `${files.length} Dateien` : files[0].filename}
+        </span>
+        <button className="primary" onClick={() => files.forEach((f) => store.saveFile(f.id))} disabled={!dirty}>
           Speichern{dirty ? " *" : ""}
         </button>
       </div>
       <div className="meta-fields">
-        {FIELDS.map(({ key, label, multiline, options }) => {
+        {FIELDS.map(({ key, label, multiline, options, hint }) => {
           const mixed = isMixed(files, key);
-          const value = localMeta[key] ?? "";
+          const value = (local as Record<string, string>)[key] ?? "";
           return (
             <div key={key} className="field-row">
-              <label className={mixed ? "label mixed" : "label"}>{label}{mixed ? " (gemischt)" : ""}</label>
+              <label className={mixed ? "label mixed" : "label"}>
+                {label}
+                {hint && <span className="field-hint"> · {hint}</span>}
+                {mixed && <span className="mixed-badge"> gemischt</span>}
+              </label>
               {options ? (
-                <select
-                  value={value}
-                  onChange={(e) => handleChange(key, e.target.value)}
-                >
+                <select value={value} onChange={(e) => handleChange(key, e.target.value)}>
                   {mixed && <option value="">— gemischt —</option>}
-                  {options.map((o) => (
-                    <option key={o} value={o}>{o}</option>
-                  ))}
+                  <option value="">—</option>
+                  {options.map((o) => <option key={o} value={o}>{o}</option>)}
                 </select>
               ) : multiline ? (
                 <textarea
@@ -132,49 +151,24 @@ export function MetaEditor({ files }: Props) {
         })}
       </div>
       <style>{`
-        .meta-editor {
-          display: flex;
-          flex-direction: column;
-          height: 100%;
-          overflow: hidden;
-        }
+        .meta-editor { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
         .meta-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 8px 12px;
-          border-bottom: 1px solid var(--border);
-          font-size: 11px;
-          color: var(--text-muted);
-          flex-shrink: 0;
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 7px 12px; border-bottom: 1px solid var(--border);
+          flex-shrink: 0; gap: 8px;
         }
-        .meta-fields {
-          flex: 1;
-          overflow-y: auto;
-          padding: 8px 12px;
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-        }
-        .field-row {
-          display: flex;
-          flex-direction: column;
-          gap: 2px;
-        }
-        .label {
-          font-size: 10px;
-          color: var(--text-muted);
-          font-weight: 500;
-          text-transform: uppercase;
-          letter-spacing: 0.4px;
-        }
+        .meta-title { font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .meta-fields { flex: 1; overflow-y: auto; padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; }
+        .field-row { display: flex; flex-direction: column; gap: 2px; }
+        .label { font-size: 10px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
         .label.mixed { color: var(--accent); }
-        .field-row input,
-        .field-row select,
-        .field-row textarea {
-          width: 100%;
-          font-size: 12px;
+        .field-hint { font-weight: 400; text-transform: none; letter-spacing: 0; opacity: 0.7; }
+        .mixed-badge {
+          display: inline-block; font-size: 9px; padding: 0 4px; margin-left: 4px;
+          background: var(--accent); color: #fff; border-radius: 3px;
+          text-transform: none; letter-spacing: 0;
         }
+        .field-row input, .field-row select, .field-row textarea { width: 100%; font-size: 12px; }
         .field-row textarea { resize: vertical; }
       `}</style>
     </div>
