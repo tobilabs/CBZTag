@@ -165,16 +165,31 @@ class Store {
   async saveFile(id: string) {
     const file = this.files.find((f) => f.id === id);
     if (!file || !file.dirty) return;
+
     await invoke("save_cbz", { path: file.path, meta: file.meta, pages: file.pages });
-    // After saving, update the baseline so discard would return to the saved state
-    file.originalMeta = { ...file.meta };
-    file.originalPages = file.pages.map((p) => ({ ...p }));
+
+    // Reload from disk so the displayed data reflects exactly what was written
+    try {
+      const result: { meta: ComicMeta; pages: PageEntry[] } = await invoke("load_cbz", { path: file.path });
+      file.meta          = result.meta;
+      file.originalMeta  = { ...result.meta };
+      file.pages         = result.pages;
+      file.originalPages = result.pages.map((p) => ({ ...p }));
+    } catch {
+      // Reload failed — keep in-memory state as baseline
+      file.originalMeta  = { ...file.meta };
+      file.originalPages = file.pages.map((p) => ({ ...p }));
+    }
+
     file.dirty = false;
     this.notify();
   }
 
   async saveAll() {
-    await Promise.all(this.files.filter((f) => f.dirty).map((f) => this.saveFile(f.id)));
+    // Sequential — parallel large-file I/O degrades throughput noticeably
+    for (const file of this.files.filter((f) => f.dirty)) {
+      await this.saveFile(file.id);
+    }
   }
 
   removeFiles(ids: string[]) {

@@ -190,8 +190,8 @@ pub fn add_pages(path: &str, image_paths: &[String]) -> Result<Vec<PageInfo>> {
         let mut dst = ZipWriter::new(dst_file);
 
         for i in 0..src.len() {
-            let name = src.by_index(i)?.name().to_owned();
-            copy_entry(&mut src, &mut dst, &name)?;
+            let entry = src.by_index(i)?;
+            dst.raw_copy_file(entry)?;
         }
 
         let opts = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
@@ -255,17 +255,12 @@ pub fn get_page_thumbnail(cbz_path: &str, filename: &str) -> Result<String> {
 // ── ZIP helpers ───────────────────────────────────────────────────────────────
 
 fn copy_entry<R: Read + Seek>(src: &mut ZipArchive<R>, dst: &mut ZipWriter<File>, name: &str) -> Result<()> {
-    let mut entry = match src.by_name(name) {
+    let entry = match src.by_name(name) {
         Ok(e) => e,
         Err(_) => return Ok(()),
     };
-    let opts = SimpleFileOptions::default()
-        .compression_method(entry.compression())
-        .last_modified_time(entry.last_modified().unwrap_or_default());
-    dst.start_file(entry.name().to_owned(), opts)?;
-    let mut buf = Vec::new();
-    entry.read_to_end(&mut buf)?;
-    dst.write_all(&buf)?;
+    // raw_copy_file transfers compressed bytes directly — no decompression overhead.
+    dst.raw_copy_file(entry)?;
     Ok(())
 }
 
