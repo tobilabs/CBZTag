@@ -1,0 +1,26 @@
+[package]
+name = "cbztag"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "cbztag_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[[bin]]
+name = "cbztag"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+zip = "2"
+quick-xml = { version = "0.36", features = ["serialize"] }
+tempfile = "3"
+anyhow = "1"
