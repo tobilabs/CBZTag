@@ -27,8 +27,11 @@ export function PageEditor({ file }: Props) {
   const handleMouseEnter = useCallback(
     async (filename: string, e: React.MouseEvent) => {
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-      const x = rect.right + 8;
-      const y = rect.top;
+      const TOOLTIP_W = 228;
+      const TOOLTIP_H = 320;
+      // Show to the left of the panel; clamp so it doesn't go above the viewport
+      const x = rect.left - TOOLTIP_W - 8;
+      const y = Math.min(rect.top, window.innerHeight - TOOLTIP_H - 8);
 
       // Show immediately from cache, otherwise wait 120 ms before fetching
       const cached = thumbnailCache.current.get(filename);
