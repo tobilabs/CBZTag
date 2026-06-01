@@ -102,17 +102,39 @@ export function MetaEditor({ files }: Props) {
     files.forEach((f) => store.updateMeta(f.id, { [key]: value }));
   }
 
+  function handleDiscard() {
+    files.forEach((f) => store.discardFile(f.id));
+    // Re-sync local state from freshly-reverted files
+    const m: Partial<ComicMeta> = {};
+    FIELDS.forEach(({ key }) => {
+      const reverted = files.map((f) => f.originalMeta[key] ?? "");
+      if (new Set(reverted).size === 1) (m as Record<string, string>)[key] = reverted[0] ?? "";
+    });
+    setLocal(m);
+  }
+
   const dirty = files.some((f) => f.dirty);
 
   return (
     <div className="meta-editor">
+      {isMulti && (
+        <div className="bulk-banner">
+          <span>✦ Bulk-Edit — {files.length} Dateien ausgewählt</span>
+          <span className="bulk-hint">Änderungen gelten für alle markierten Dateien</span>
+        </div>
+      )}
       <div className="meta-header">
         <span className="meta-title">
           {isMulti ? `${files.length} Dateien` : files[0].filename}
         </span>
-        <button className="primary" onClick={() => files.forEach((f) => store.saveFile(f.id))} disabled={!dirty}>
-          Speichern{dirty ? " *" : ""}
-        </button>
+        <div className="meta-actions">
+          <button onClick={handleDiscard} disabled={!dirty} className="discard-btn">
+            Verwerfen
+          </button>
+          <button className="primary" onClick={() => files.forEach((f) => store.saveFile(f.id))} disabled={!dirty}>
+            Speichern{dirty ? " *" : ""}
+          </button>
+        </div>
       </div>
       <div className="meta-fields">
         {FIELDS.map(({ key, label, multiline, options, hint }) => {
@@ -152,12 +174,22 @@ export function MetaEditor({ files }: Props) {
       </div>
       <style>{`
         .meta-editor { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+        .bulk-banner {
+          display: flex; flex-direction: column; gap: 2px;
+          padding: 6px 12px; background: #1a2a3e;
+          border-bottom: 1px solid #2a4a6e; flex-shrink: 0;
+        }
+        .bulk-banner span { font-size: 11px; color: #6ab0f5; font-weight: 600; }
+        .bulk-banner .bulk-hint { font-size: 10px; color: var(--text-muted); font-weight: 400; }
         .meta-header {
           display: flex; align-items: center; justify-content: space-between;
           padding: 7px 12px; border-bottom: 1px solid var(--border);
           flex-shrink: 0; gap: 8px;
         }
-        .meta-title { font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .meta-actions { display: flex; gap: 6px; flex-shrink: 0; }
+        .discard-btn { background: #3a2a1a; color: #e8a055; }
+        .discard-btn:hover:not(:disabled) { background: #7a4a10; }
+        .meta-title { font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
         .meta-fields { flex: 1; overflow-y: auto; padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; }
         .field-row { display: flex; flex-direction: column; gap: 2px; }
         .label { font-size: 10px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }

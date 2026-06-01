@@ -32,7 +32,9 @@ class Store {
         path: p,
         filename: p.split(/[\\/]/).pop() ?? p,
         meta: {},
+        originalMeta: {},
         pages: [],
+        originalPages: [],
         dirty: false,
         loading: true,
       }));
@@ -47,7 +49,9 @@ class Store {
             path: entry.path,
           });
           entry.meta = result.meta;
+          entry.originalMeta = { ...result.meta };
           entry.pages = result.pages;
+          entry.originalPages = result.pages.map((p) => ({ ...p }));
           entry.loading = false;
         } catch (e) {
           entry.loading = false;
@@ -78,6 +82,24 @@ class Store {
     this.notify();
   }
 
+  discardFile(id: string) {
+    const file = this.files.find((f) => f.id === id);
+    if (!file) return;
+    file.meta = { ...file.originalMeta };
+    file.pages = file.originalPages.map((p) => ({ ...p }));
+    file.dirty = false;
+    this.notify();
+  }
+
+  discardAll() {
+    this.files.filter((f) => f.dirty).forEach((file) => {
+      file.meta = { ...file.originalMeta };
+      file.pages = file.originalPages.map((p) => ({ ...p }));
+      file.dirty = false;
+    });
+    this.notify();
+  }
+
   reorderPages(id: string, fromIndex: number, toIndex: number) {
     const file = this.files.find((f) => f.id === id);
     if (!file) return;
@@ -89,12 +111,10 @@ class Store {
     this.notify();
   }
 
-  updatePage(id: string, pageIndex: number, patch: Partial<import("./types").PageEntry>) {
+  updatePage(id: string, pageIndex: number, patch: Partial<PageEntry>) {
     const file = this.files.find((f) => f.id === id);
     if (!file) return;
-    file.pages = file.pages.map((p, i) =>
-      i === pageIndex ? { ...p, ...patch } : p
-    );
+    file.pages = file.pages.map((p, i) => i === pageIndex ? { ...p, ...patch } : p);
     file.dirty = true;
     this.notify();
   }
@@ -113,10 +133,7 @@ class Store {
   async addPages(id: string, imagePaths: string[]) {
     const file = this.files.find((f) => f.id === id);
     if (!file) return;
-    const added: import("./types").PageEntry[] = await invoke("add_pages", {
-      path: file.path,
-      imagePaths,
-    });
+    const added: PageEntry[] = await invoke("add_pages", { path: file.path, imagePaths });
     file.pages = [
       ...file.pages,
       ...added.map((p, i) => ({ ...p, index: file.pages.length + i })),
@@ -128,29 +145,21 @@ class Store {
   async saveFile(id: string) {
     const file = this.files.find((f) => f.id === id);
     if (!file || !file.dirty) return;
-    await invoke("save_cbz", {
-      path: file.path,
-      meta: file.meta,
-      pages: file.pages,
-    });
+    await invoke("save_cbz", { path: file.path, meta: file.meta, pages: file.pages });
+    // After saving, update the baseline so discard would return to the saved state
+    file.originalMeta = { ...file.meta };
+    file.originalPages = file.pages.map((p) => ({ ...p }));
     file.dirty = false;
     this.notify();
   }
 
   async saveAll() {
-    await Promise.all(
-      this.files.filter((f) => f.dirty).map((f) => this.saveFile(f.id))
-    );
+    await Promise.all(this.files.filter((f) => f.dirty).map((f) => this.saveFile(f.id)));
   }
 
   removeFiles(ids: string[]) {
     this.files = this.files.filter((f) => !ids.includes(f.id));
     ids.forEach((id) => this.selected.delete(id));
-    this.notify();
-  }
-
-  setSelected(ids: Set<string>) {
-    this.selected = ids;
     this.notify();
   }
 
@@ -160,9 +169,8 @@ class Store {
       next.has(id) ? next.delete(id) : next.add(id);
       this.selected = next;
     } else {
-      this.selected = this.selected.has(id) && this.selected.size === 1
-        ? new Set()
-        : new Set([id]);
+      this.selected =
+        this.selected.has(id) && this.selected.size === 1 ? new Set() : new Set([id]);
     }
     this.notify();
   }

@@ -76,7 +76,9 @@ export interface ComicFile {
   path: string;
   filename: string;
   meta: ComicMeta;
+  originalMeta: ComicMeta;
   pages: PageEntry[];
+  originalPages: PageEntry[];
   dirty: boolean;
   loading: boolean;
   error?: string;

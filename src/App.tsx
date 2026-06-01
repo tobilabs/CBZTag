@@ -47,6 +47,7 @@ export default function App() {
         onOpenFiles={handleOpenFiles}
         onOpenFolder={handleOpenFolder}
         onSaveAll={() => store.saveAll()}
+        onDiscardAll={() => store.discardAll()}
         dirtyCount={dirtyCount}
         selectedCount={selected.size}
         onRemoveSelected={() => store.removeFiles([...selected])}
