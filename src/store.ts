@@ -3,15 +3,23 @@ import { ComicFile, ComicMeta, BulkEdit, PageEntry } from "./types";
 
 type Listener = () => void;
 
+export interface StatusInfo {
+  message: string;
+  current: number;
+  total: number;
+}
+
 export interface StoreSnapshot {
   files: ComicFile[];
   selected: Set<string>;
+  status: StatusInfo | null;
 }
 
 class Store {
   files: ComicFile[] = [];
   selected: Set<string> = new Set();
-  snapshot: StoreSnapshot = { files: this.files, selected: this.selected };
+  status: StatusInfo | null = null;
+  snapshot: StoreSnapshot = { files: this.files, selected: this.selected, status: null };
   private listeners: Set<Listener> = new Set();
 
   subscribe(fn: Listener) {
@@ -20,8 +28,13 @@ class Store {
   }
 
   private notify() {
-    this.snapshot = { files: this.files, selected: this.selected };
+    this.snapshot = { files: this.files, selected: this.selected, status: this.status };
     this.listeners.forEach((fn) => fn());
+  }
+
+  setStatus(s: StatusInfo | null) {
+    this.status = s;
+    this.notify();
   }
 
   async openFiles(paths: string[]) {
@@ -39,8 +52,12 @@ class Store {
         loading: true,
       }));
 
+    if (newEntries.length === 0) return;
+
     this.files = [...this.files, ...newEntries];
-    this.notify();
+    const total = newEntries.length;
+    let done = 0;
+    this.setStatus({ message: "Lade Comics…", current: 0, total });
 
     await Promise.all(
       newEntries.map(async (entry) => {
@@ -57,9 +74,13 @@ class Store {
           entry.loading = false;
           entry.error = String(e);
         }
+        done++;
+        this.status = { message: "Lade Comics…", current: done, total };
         this.notify();
       })
     );
+
+    this.setStatus(null);
   }
 
   updateMeta(id: string, meta: Partial<ComicMeta>) {
@@ -98,6 +119,8 @@ class Store {
       file.meta = { ...file.meta, ...transform(file) };
       file.dirty = true;
     });
+    this.setStatus({ message: `${ids.length} Comic${ids.length !== 1 ? "s" : ""} aktualisiert`, current: ids.length, total: ids.length });
+    setTimeout(() => this.setStatus(null), 2500);
     this.notify();
   }
 
@@ -187,10 +210,17 @@ class Store {
   }
 
   async saveAll() {
-    // Sequential — parallel large-file I/O degrades throughput noticeably
-    for (const file of this.files.filter((f) => f.dirty)) {
+    const dirty = this.files.filter((f) => f.dirty);
+    if (dirty.length === 0) return;
+    let done = 0;
+    this.setStatus({ message: "Speichere…", current: 0, total: dirty.length });
+    for (const file of dirty) {
       await this.saveFile(file.id);
+      done++;
+      this.setStatus({ message: "Speichere…", current: done, total: dirty.length });
     }
+    this.setStatus({ message: `${dirty.length} Comic${dirty.length !== 1 ? "s" : ""} gespeichert`, current: dirty.length, total: dirty.length });
+    setTimeout(() => this.setStatus(null), 2500);
   }
 
   removeFiles(ids: string[]) {

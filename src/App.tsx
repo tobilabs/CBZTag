@@ -9,6 +9,7 @@ import { PageEditor } from "./components/PageEditor";
 import { Toolbar } from "./components/Toolbar";
 import { BulkOpsMenu } from "./components/BulkOpsMenu";
 import { NumberingModal } from "./components/NumberingModal";
+import { StatusBar } from "./components/StatusBar";
 import "./App.css";
 
 async function collectCbzFiles(dirPath: string): Promise<string[]> {
@@ -28,7 +29,7 @@ async function collectCbzFiles(dirPath: string): Promise<string[]> {
 type Panel = "meta" | "pages";
 
 export default function App() {
-  const { files, selected } = useStore();
+  const { files, selected, status } = useStore();
   const [panel, setPanel]               = useState<Panel>("meta");
   const [numberingOpen, setNumberingOpen] = useState(false);
 
@@ -53,8 +54,14 @@ export default function App() {
   const handleOpenFolder = useCallback(async () => {
     const result = await open({ directory: true });
     if (typeof result === "string") {
+      store.setStatus({ message: "Ordner wird durchsucht…", current: 0, total: 0 });
       const cbzPaths = await collectCbzFiles(result);
-      if (cbzPaths.length > 0) await store.openFiles(cbzPaths);
+      if (cbzPaths.length > 0) {
+        await store.openFiles(cbzPaths);
+      } else {
+        store.setStatus({ message: "Keine CBZ-Dateien gefunden", current: 0, total: 0 });
+        setTimeout(() => store.setStatus(null), 2500);
+      }
     }
   }, []);
 
@@ -109,6 +116,8 @@ export default function App() {
           )}
         </div>
       </div>
+
+      <StatusBar status={status} />
 
       {numberingOpen && (
         <NumberingModal
