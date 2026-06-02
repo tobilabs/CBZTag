@@ -23,12 +23,17 @@ fn get_page_thumbnail(path: String, filename: String) -> Result<String, String> 
     cbz::get_page_thumbnail(&path, &filename).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn extract_pages(path: String, filenames: Vec<String>, dest_dir: String) -> Result<Vec<String>, String> {
+    cbz::extract_pages(&path, &filenames, &dest_dir).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        .invoke_handler(tauri::generate_handler![load_cbz, save_cbz, add_pages, get_page_thumbnail])
+        .invoke_handler(tauri::generate_handler![load_cbz, save_cbz, add_pages, get_page_thumbnail, extract_pages])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

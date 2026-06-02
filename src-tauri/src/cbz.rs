@@ -252,6 +252,44 @@ pub fn get_page_thumbnail(cbz_path: &str, filename: &str) -> Result<String> {
     Ok(format!("data:{};base64,{}", mime, b64))
 }
 
+/// Extracts a subset of pages from a CBZ into `dest_dir`.
+/// Returns the list of written file paths.
+pub fn extract_pages(cbz_path: &str, filenames: &[String], dest_dir: &str) -> Result<Vec<String>> {
+    let file = File::open(cbz_path).context("CBZ öffnen")?;
+    let mut archive = ZipArchive::new(file).context("ZIP öffnen")?;
+
+    // Build basename → full entry-name map
+    let name_map: HashMap<String, String> = (0..archive.len())
+        .filter_map(|i| {
+            let e = archive.by_index(i).ok()?;
+            let name = e.name().to_owned();
+            if is_image(&name.to_lowercase()) {
+                let base = name.rsplit('/').next().unwrap_or(&name).to_owned();
+                Some((base, name))
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    let dest = std::path::Path::new(dest_dir);
+    fs::create_dir_all(dest).context("Zielordner anlegen")?;
+
+    let mut written: Vec<String> = Vec::new();
+    for basename in filenames {
+        let entry_name = name_map.get(basename).map(|s| s.as_str()).unwrap_or(basename);
+        let mut entry = match archive.by_name(entry_name) {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        let out_path = dest.join(basename);
+        let mut out_file = File::create(&out_path).context("Ausgabedatei erstellen")?;
+        std::io::copy(&mut entry, &mut out_file)?;
+        written.push(out_path.to_string_lossy().into_owned());
+    }
+    Ok(written)
+}
+
 // ── ZIP helpers ───────────────────────────────────────────────────────────────
 
 fn copy_entry<R: Read + Seek>(src: &mut ZipArchive<R>, dst: &mut ZipWriter<File>, name: &str) -> Result<()> {

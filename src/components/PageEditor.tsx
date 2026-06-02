@@ -98,6 +98,27 @@ export function PageEditor({ file }: Props) {
 
   // ── Actions ──────────────────────────────────────────────────────────────
 
+  async function handleExtract() {
+    const filenames = file.pages
+      .filter((_, i) => selected.has(i))
+      .map((p) => p.filename);
+    if (filenames.length === 0) return;
+
+    const destDir = await open({ directory: true, title: "Zielordner wählen" });
+    if (typeof destDir !== "string") return;
+
+    try {
+      const written: string[] = await invoke("extract_pages", {
+        path: file.path,
+        filenames,
+        destDir,
+      });
+      alert(`${written.length} Seite(n) extrahiert nach:\n${destDir}`);
+    } catch (e) {
+      alert(`Fehler beim Extrahieren:\n${e}`);
+    }
+  }
+
   async function handleAddPages() {
     const result = await open({
       multiple: true,
@@ -139,9 +160,14 @@ export function PageEditor({ file }: Props) {
         <span>{file.pages.length} Seiten</span>
         <div className="page-actions">
           {selected.size > 0 && (
-            <button onClick={handleRemove} className="danger">
-              {selected.size} entfernen
-            </button>
+            <>
+              <button onClick={handleExtract}>
+                ↓ Extrahieren ({selected.size})
+              </button>
+              <button onClick={handleRemove} className="danger">
+                {selected.size} entfernen
+              </button>
+            </>
           )}
           <button onClick={handleAddPages}>+ Hinzufügen</button>
         </div>
