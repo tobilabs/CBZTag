@@ -16,6 +16,7 @@ interface TooltipState {
 
 export function PageEditor({ file }: Props) {
   const [selected, setSelected]   = useState<Set<number>>(new Set());
+  const anchorIdx                 = useRef<number>(-1);
   const [tooltip, setTooltip]     = useState<TooltipState | null>(null);
   const [dragOver, setDragOver]   = useState<number | null>(null);
   const thumbnailCache            = useRef<Map<string, string>>(new Map());
@@ -67,16 +68,21 @@ export function PageEditor({ file }: Props) {
 
   // ── Selection ────────────────────────────────────────────────────────────
 
-  function toggleSelect(i: number, e: React.MouseEvent) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (e.metaKey || e.ctrlKey) {
+  function handleRowClick(i: number, e: React.MouseEvent) {
+    if (e.shiftKey && anchorIdx.current >= 0) {
+      const [lo, hi] = i < anchorIdx.current ? [i, anchorIdx.current] : [anchorIdx.current, i];
+      setSelected(new Set(Array.from({ length: hi - lo + 1 }, (_, k) => lo + k)));
+    } else if (e.metaKey || e.ctrlKey) {
+      anchorIdx.current = i;
+      setSelected((prev) => {
+        const next = new Set(prev);
         next.has(i) ? next.delete(i) : next.add(i);
-      } else {
-        return next.size === 1 && next.has(i) ? new Set() : new Set([i]);
-      }
-      return next;
-    });
+        return next;
+      });
+    } else {
+      anchorIdx.current = i;
+      setSelected((prev) => prev.size === 1 && prev.has(i) ? new Set() : new Set([i]));
+    }
   }
 
   // ── Pointer drag ─────────────────────────────────────────────────────────
@@ -212,7 +218,8 @@ export function PageEditor({ file }: Props) {
               dragOver === i            ? "drag-over" : "",
               selected.has(i)           ? "selected"  : "",
             ].filter(Boolean).join(" ")}
-            onClick={(e) => toggleSelect(i, e)}
+            onClick={(e) => handleRowClick(i, e)}
+            onMouseDown={(e) => { if (e.shiftKey || e.ctrlKey || e.metaKey) e.preventDefault(); }}
             onPointerDown={(e) => handlePointerDown(e, i)}
           >
             <span
