@@ -76,8 +76,12 @@ export function FileTable() {
 
   // ── Sort ───────────────────────────────────────────────────────────────────
   const sorted = [...files].sort((a, b) => {
-    const av = a.meta[sortField] ?? a.filename;
-    const bv = b.meta[sortField] ?? b.filename;
+    const av = a.meta[sortField] ?? "";
+    const bv = b.meta[sortField] ?? "";
+    // Empty values always sink to the bottom regardless of direction
+    if (av === "" && bv === "") return 0;
+    if (av === "") return 1;
+    if (bv === "") return -1;
     return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
   });
 
