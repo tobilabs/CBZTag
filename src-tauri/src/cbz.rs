@@ -193,49 +193,6 @@ pub fn save_cbz(path: &str, meta: &ComicMeta, pages: &[PageInfo]) -> Result<()> 
     Ok(())
 }
 
-/// Appends new image files to an existing CBZ without re-extracting anything.
-pub fn add_pages(path: &str, image_paths: &[String]) -> Result<Vec<PageInfo>> {
-    let tmp_path = format!("{}.cbztag.tmp", path);
-    let mut added: Vec<PageInfo> = Vec::new();
-    {
-        let src_file = File::open(path).context("Quelldatei öffnen")?;
-        let mut src = ZipArchive::new(src_file).context("Quell-ZIP öffnen")?;
-
-        let existing: std::collections::HashSet<String> = (0..src.len())
-            .filter_map(|i| src.by_index(i).ok().map(|e| e.name().to_owned()))
-            .collect();
-
-        let dst_file = File::create(&tmp_path).context("Temp-Datei erstellen")?;
-        let mut dst = ZipWriter::new(dst_file);
-
-        for i in 0..src.len() {
-            let entry = src.by_index(i)?;
-            dst.raw_copy_file(entry)?;
-        }
-
-        let opts = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
-        for img_path in image_paths {
-            let base = std::path::Path::new(img_path)
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or(img_path)
-                .to_owned();
-            let entry_name = if existing.contains(&base) {
-                format!("added_{}", base)
-            } else {
-                base
-            };
-            let mut data = Vec::new();
-            File::open(img_path)?.read_to_end(&mut data)?;
-            dst.start_file(&entry_name, opts)?;
-            dst.write_all(&data)?;
-            added.push(PageInfo { filename: entry_name, index: 0, page_type: None, double_page: None, source_path: None });
-        }
-        dst.finish()?;
-    }
-    fs::rename(&tmp_path, path).context("Atomisches Ersetzen")?;
-    Ok(added)
-}
 
 /// Returns a page as a base64 data URL.
 /// `source_path` is set for pages not yet written into the CBZ (pending additions).
