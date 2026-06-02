@@ -2,14 +2,15 @@ import { StatusInfo } from "../store";
 
 interface Props {
   status: StatusInfo | null;
+  fileCount: number;
 }
 
-export function StatusBar({ status }: Props) {
+export function StatusBar({ status, fileCount }: Props) {
   const isDone = status !== null && status.total > 0 && status.current === status.total;
 
   return (
-    <div className={`status-bar${status ? " active" : ""}`}>
-      {status && (
+    <div className="status-bar">
+      {status ? (
         <>
           <span className="status-message">{status.message}</span>
           {status.total > 0 && (
@@ -20,14 +21,17 @@ export function StatusBar({ status }: Props) {
                   style={{ width: `${Math.round((status.current / status.total) * 100)}%` }}
                 />
               </div>
-              <span className="status-counter">
-                {status.current} / {status.total}
-              </span>
+              <span className="status-counter">{status.current} / {status.total}</span>
             </>
           )}
         </>
+      ) : (
+        <span className="status-idle">
+          {fileCount === 0 ? "Keine Comics geladen" : `${fileCount} Comic${fileCount !== 1 ? "s" : ""} geladen`}
+        </span>
       )}
       <style>{`
+        .status-idle { color: var(--text-muted); }
         .status-bar {
           height: 22px;
           background: var(--surface);

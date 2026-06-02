@@ -86,7 +86,7 @@ export interface ComicFile {
   error?: string;
 }
 
-export type SortField = keyof Pick<ComicMeta, "title" | "series" | "number" | "year" | "publisher">;
+export type SortField = keyof ComicMeta;
 export type SortDir = "asc" | "desc";
 
 export interface BulkEdit {

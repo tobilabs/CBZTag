@@ -3,27 +3,27 @@ import { store, useStore } from "../store";
 import { ComicMeta, SortField, SortDir } from "../types";
 
 // All columns available for display
-const ALL_COLUMNS: { key: keyof ComicMeta; label: string; defaultWidth: number; sortable?: boolean }[] = [
-  { key: "title",               label: "Titel",           defaultWidth: 200, sortable: true },
-  { key: "series",              label: "Serie",            defaultWidth: 160, sortable: true },
-  { key: "number",              label: "Nr.",              defaultWidth: 48,  sortable: true },
-  { key: "count",               label: "Gesamt",           defaultWidth: 60 },
-  { key: "volume",              label: "Band",             defaultWidth: 50 },
-  { key: "year",                label: "Jahr",             defaultWidth: 58,  sortable: true },
-  { key: "month",               label: "Monat",            defaultWidth: 56 },
-  { key: "writer",              label: "Autor",            defaultWidth: 140 },
-  { key: "penciller",           label: "Zeichner",         defaultWidth: 130 },
-  { key: "publisher",           label: "Verlag",           defaultWidth: 120, sortable: true },
-  { key: "imprint",             label: "Imprint",          defaultWidth: 110 },
-  { key: "genre",               label: "Genre",            defaultWidth: 120 },
-  { key: "format",              label: "Format",           defaultWidth: 80 },
-  { key: "languageISO",         label: "Sprache",          defaultWidth: 70 },
-  { key: "ageRating",           label: "FSK",              defaultWidth: 100 },
-  { key: "blackAndWhite",       label: "S/W",              defaultWidth: 50 },
-  { key: "manga",               label: "Manga",            defaultWidth: 60 },
-  { key: "storyArc",            label: "Story Arc",        defaultWidth: 130 },
-  { key: "seriesGroup",         label: "Seriengruppe",     defaultWidth: 120 },
-  { key: "communityRating",     label: "Bewertung",        defaultWidth: 80 },
+const ALL_COLUMNS: { key: keyof ComicMeta; label: string; defaultWidth: number }[] = [
+  { key: "title",           label: "Titel",        defaultWidth: 200 },
+  { key: "series",          label: "Serie",        defaultWidth: 160 },
+  { key: "number",          label: "Nr.",          defaultWidth: 48  },
+  { key: "count",           label: "Gesamt",       defaultWidth: 60  },
+  { key: "volume",          label: "Band",         defaultWidth: 50  },
+  { key: "year",            label: "Jahr",         defaultWidth: 58  },
+  { key: "month",           label: "Monat",        defaultWidth: 56  },
+  { key: "writer",          label: "Autor",        defaultWidth: 140 },
+  { key: "penciller",       label: "Zeichner",     defaultWidth: 130 },
+  { key: "publisher",       label: "Verlag",       defaultWidth: 120 },
+  { key: "imprint",         label: "Imprint",      defaultWidth: 110 },
+  { key: "genre",           label: "Genre",        defaultWidth: 120 },
+  { key: "format",          label: "Format",       defaultWidth: 80  },
+  { key: "languageISO",     label: "Sprache",      defaultWidth: 70  },
+  { key: "ageRating",       label: "FSK",          defaultWidth: 100 },
+  { key: "blackAndWhite",   label: "S/W",          defaultWidth: 50  },
+  { key: "manga",           label: "Manga",        defaultWidth: 60  },
+  { key: "storyArc",        label: "Story Arc",    defaultWidth: 130 },
+  { key: "seriesGroup",     label: "Seriengruppe", defaultWidth: 120 },
+  { key: "communityRating", label: "Bewertung",    defaultWidth: 80  },
 ];
 
 const DEFAULT_VISIBLE = new Set<keyof ComicMeta>(["title", "series", "number", "year", "publisher"]);
@@ -81,11 +81,9 @@ export function FileTable() {
     return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
   });
 
-  function handleSort(key: keyof ComicMeta) {
-    if (!ALL_COLUMNS.find((c) => c.key === key)?.sortable) return;
-    const field = key as SortField;
-    if (field === sortField) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    else { setSortField(field); setSortDir("asc"); }
+  function handleSort(key: SortField) {
+    if (key === sortField) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortField(key); setSortDir("asc"); }
   }
 
   // ── Selection ──────────────────────────────────────────────────────────────
@@ -151,12 +149,12 @@ export function FileTable() {
         {visibleCols.map((c) => (
           <div
             key={c.key}
-            className={`col${c.sortable ? " sortable" : ""}${c.sortable && sortField === c.key ? " sorted" : ""}`}
+            className={`col sortable${sortField === c.key ? " sorted" : ""}`}
             style={{ width: c.defaultWidth, flexShrink: 0 }}
-            onClick={() => c.sortable && handleSort(c.key)}
+            onClick={() => handleSort(c.key)}
           >
             {c.label}
-            {c.sortable && sortField === c.key && (
+            {sortField === c.key && (
               <span className="sort-arrow">{sortDir === "asc" ? " ▲" : " ▼"}</span>
             )}
           </div>

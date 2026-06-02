@@ -117,7 +117,7 @@ export default function App() {
         </div>
       </div>
 
-      <StatusBar status={status} />
+      <StatusBar status={status} fileCount={files.length} />
 
       {numberingOpen && (
         <NumberingModal
