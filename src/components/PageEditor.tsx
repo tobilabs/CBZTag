@@ -15,7 +15,10 @@ interface TooltipState {
 }
 
 export function PageEditor({ file }: Props) {
-  const [dragging, setDragging]     = useState<number | null>(null);
+  // Ref for the actual value used in onDrop — avoids stale-closure bugs
+  // when React batches the re-render after onDragStart.
+  const draggingRef                 = useRef<number | null>(null);
+  const [dragging, setDragging]     = useState<number | null>(null); // visual only
   const [dragOver, setDragOver]     = useState<number | null>(null);
   const [selected, setSelected]     = useState<Set<number>>(new Set());
   const [tooltip, setTooltip]       = useState<TooltipState | null>(null);
@@ -80,6 +83,7 @@ export function PageEditor({ file }: Props) {
   // ── Drag & Drop ──────────────────────────────────────────────────────────
 
   function handleDragStart(index: number) {
+    draggingRef.current = index;
     setDragging(index);
     setTooltip(null);
   }
@@ -90,10 +94,12 @@ export function PageEditor({ file }: Props) {
   }
 
   function handleDrop(toIndex: number) {
-    if (dragging !== null && dragging !== toIndex) {
-      store.reorderPages(file.id, dragging, toIndex);
+    const from = draggingRef.current;
+    if (from !== null && from !== toIndex) {
+      store.reorderPages(file.id, from, toIndex);
       setSelected(new Set([toIndex]));
     }
+    draggingRef.current = null;
     setDragging(null);
     setDragOver(null);
   }

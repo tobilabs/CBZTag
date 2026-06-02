@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { store } from "../store";
 import { ComicFile } from "../types";
 
@@ -10,15 +10,19 @@ interface Props {
 export function NumberingModal({ files, onClose }: Props) {
   const [order, setOrder]       = useState<ComicFile[]>(files);
   const [start, setStart]       = useState("1");
+  const draggingRef             = useRef<number | null>(null);
   const [dragging, setDragging] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState<number | null>(null);
 
   function handleDrop(toIdx: number) {
-    if (dragging === null || dragging === toIdx) { setDragging(null); setDragOver(null); return; }
-    const next = [...order];
-    const [moved] = next.splice(dragging, 1);
-    next.splice(toIdx, 0, moved);
-    setOrder(next);
+    const from = draggingRef.current;
+    if (from !== null && from !== toIdx) {
+      const next = [...order];
+      const [moved] = next.splice(from, 1);
+      next.splice(toIdx, 0, moved);
+      setOrder(next);
+    }
+    draggingRef.current = null;
     setDragging(null);
     setDragOver(null);
   }
@@ -69,7 +73,7 @@ export function NumberingModal({ files, onClose }: Props) {
                   dragOver  === i  ? "drag-over" : "",
                 ].filter(Boolean).join(" ")}
                 draggable
-                onDragStart={() => setDragging(i)}
+                onDragStart={() => { draggingRef.current = i; setDragging(i); }}
                 onDragOver={(e) => { e.preventDefault(); setDragOver(i); }}
                 onDrop={() => handleDrop(i)}
                 onDragEnd={() => { setDragging(null); setDragOver(null); }}
