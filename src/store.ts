@@ -131,6 +131,8 @@ class Store {
       file.meta = { ...file.meta, number: String(startNumber + i) };
       file.dirty = true;
     });
+    this.setStatus({ message: `${orderedIds.length} Comic${orderedIds.length !== 1 ? "s" : ""} nummeriert`, current: orderedIds.length, total: orderedIds.length });
+    setTimeout(() => this.setStatus(null), 2500);
     this.notify();
   }
 
@@ -209,8 +211,10 @@ class Store {
     this.notify();
   }
 
-  async saveAll() {
-    const dirty = this.files.filter((f) => f.dirty);
+  async saveAll(ids?: string[]) {
+    const dirty = this.files.filter(
+      (f) => f.dirty && (ids == null || ids.includes(f.id))
+    );
     if (dirty.length === 0) return;
     let done = 0;
     this.setStatus({ message: "Speichere…", current: 0, total: dirty.length });

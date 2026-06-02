@@ -131,7 +131,7 @@ export function MetaEditor({ files }: Props) {
           <button onClick={handleDiscard} disabled={!dirty} className="discard-btn">
             Verwerfen
           </button>
-          <button className="primary" onClick={() => files.forEach((f) => store.saveFile(f.id))} disabled={!dirty}>
+          <button className="primary" onClick={() => store.saveAll(files.map((f) => f.id))} disabled={!dirty}>
             Speichern{dirty ? " *" : ""}
           </button>
         </div>
