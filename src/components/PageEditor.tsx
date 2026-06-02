@@ -33,7 +33,9 @@ export function PageEditor({ file }: Props) {
 
   const handleMouseEnter = useCallback(
     async (filename: string, e: React.MouseEvent) => {
-      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const rect = (e.currentTarget as HTMLElement)
+        .closest(".page-row")!
+        .getBoundingClientRect();
       const TOOLTIP_W = 228;
       const TOOLTIP_H = 320;
       const x = rect.left - TOOLTIP_W - 8;
@@ -103,7 +105,8 @@ export function PageEditor({ file }: Props) {
     if (draggingIdx.current === null) return;
     e.preventDefault();
     const over = rowIndexFromY(e.clientY);
-    setDragOver(over);
+    // Avoid re-render when the target row hasn't changed
+    setDragOver((prev) => (prev === over ? prev : over));
   }
 
   function handlePointerUp(e: React.PointerEvent) {
@@ -211,10 +214,12 @@ export function PageEditor({ file }: Props) {
             ].filter(Boolean).join(" ")}
             onClick={(e) => toggleSelect(i, e)}
             onPointerDown={(e) => handlePointerDown(e, i)}
-            onMouseEnter={(e) => handleMouseEnter(page.filename, e)}
-            onMouseLeave={handleMouseLeave}
           >
-            <span className="col-num">{i + 1}</span>
+            <span
+              className="col-num"
+              onMouseEnter={(e) => handleMouseEnter(page.filename, e)}
+              onMouseLeave={handleMouseLeave}
+            >{i + 1}</span>
             <span className="col-name" title={page.filename}>{page.filename}</span>
             <select
               className="col-type"
