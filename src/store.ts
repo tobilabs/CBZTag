@@ -150,14 +150,15 @@ class Store {
     this.notify();
   }
 
-  async addPages(id: string, imagePaths: string[]) {
+  addPages(id: string, imagePaths: string[]) {
     const file = this.files.find((f) => f.id === id);
     if (!file) return;
-    const added: PageEntry[] = await invoke("add_pages", { path: file.path, imagePaths });
-    file.pages = [
-      ...file.pages,
-      ...added.map((p, i) => ({ ...p, index: file.pages.length + i })),
-    ];
+    const newPages: PageEntry[] = imagePaths.map((p, i) => ({
+      filename: p.replace(/\\/g, "/").split("/").pop() ?? p,
+      index: file.pages.length + i,
+      sourcePath: p,
+    }));
+    file.pages = [...file.pages, ...newPages];
     file.dirty = true;
     this.notify();
   }

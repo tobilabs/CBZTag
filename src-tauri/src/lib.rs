@@ -19,13 +19,13 @@ fn add_pages(path: String, image_paths: Vec<String>) -> Result<Vec<PageInfo>, St
 }
 
 #[tauri::command]
-fn get_page_thumbnail(path: String, filename: String) -> Result<String, String> {
-    cbz::get_page_thumbnail(&path, &filename).map_err(|e| e.to_string())
+fn get_page_thumbnail(path: String, filename: String, source_path: Option<String>) -> Result<String, String> {
+    cbz::get_page_thumbnail(&path, &filename, source_path.as_deref()).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn extract_pages(path: String, filenames: Vec<String>, dest_dir: String) -> Result<Vec<String>, String> {
-    cbz::extract_pages(&path, &filenames, &dest_dir).map_err(|e| e.to_string())
+fn extract_pages(path: String, pages: Vec<cbz::PageInfo>, dest_dir: String) -> Result<Vec<String>, String> {
+    cbz::extract_pages(&path, &pages, &dest_dir).map_err(|e| e.to_string())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

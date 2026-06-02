@@ -42,9 +42,11 @@ export function PageEditor({ file }: Props) {
 
       hoverTimer.current = setTimeout(async () => {
         try {
+          const page = file.pages.find((p) => p.filename === filename);
           const dataUrl: string = await invoke("get_page_thumbnail", {
             path: file.path,
             filename,
+            sourcePath: page?.sourcePath ?? null,
           });
           thumbnailCache.current.set(filename, dataUrl);
           setTooltip({ dataUrl, x, y });
@@ -99,10 +101,8 @@ export function PageEditor({ file }: Props) {
   // ── Actions ──────────────────────────────────────────────────────────────
 
   async function handleExtract() {
-    const filenames = file.pages
-      .filter((_, i) => selected.has(i))
-      .map((p) => p.filename);
-    if (filenames.length === 0) return;
+    const selectedPages = file.pages.filter((_, i) => selected.has(i));
+    if (selectedPages.length === 0) return;
 
     const destDir = await open({ directory: true, title: "Zielordner wählen" });
     if (typeof destDir !== "string") return;
@@ -110,7 +110,7 @@ export function PageEditor({ file }: Props) {
     try {
       const written: string[] = await invoke("extract_pages", {
         path: file.path,
-        filenames,
+        pages: selectedPages,
         destDir,
       });
       alert(`${written.length} Seite(n) extrahiert nach:\n${destDir}`);

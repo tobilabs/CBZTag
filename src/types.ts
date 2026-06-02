@@ -69,6 +69,8 @@ export interface PageEntry {
   index: number;
   pageType?: PageType;
   doublePage?: boolean;
+  /** Filesystem path for pages not yet written into the CBZ (pending add). */
+  sourcePath?: string;
 }
 
 export interface ComicFile {

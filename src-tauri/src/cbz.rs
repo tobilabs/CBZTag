@@ -70,6 +70,10 @@ pub struct PageInfo {
     pub page_type: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub double_page: Option<bool>,
+    /// Filesystem source path for pages not yet written into the CBZ.
+    /// Present only for pending additions; absent for pages already in the archive.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_path: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -89,12 +93,14 @@ pub fn load_cbz(path: &str) -> Result<LoadResult> {
         .filter_map(|i| archive.by_index(i).ok().map(|e| e.name().to_owned()))
         .collect();
 
-    let mut image_names: Vec<String> = names
+    // Preserve ZIP entry order — this is the authoritative sequence that
+    // Image="N" indices in ComicInfo.xml refer to after we write the file.
+    // (Initial loads of third-party CBZs are typically already in filename order.)
+    let image_names: Vec<String> = names
         .iter()
         .filter(|n| is_image(&n.to_lowercase()))
         .map(|n| n.rsplit('/').next().unwrap_or(n).to_owned())
         .collect();
-    image_names.sort();
 
     let comic_info_name = names
         .iter()
@@ -117,7 +123,7 @@ pub fn load_cbz(path: &str) -> Result<LoadResult> {
         .enumerate()
         .map(|(i, filename)| {
             let (page_type, double_page) = page_meta.get(&i).cloned().unwrap_or((None, None));
-            PageInfo { filename, index: i, page_type, double_page }
+            PageInfo { filename, index: i, page_type, double_page, source_path: None }
         })
         .collect();
 
@@ -148,9 +154,22 @@ pub fn save_cbz(path: &str, meta: &ComicMeta, pages: &[PageInfo]) -> Result<()> 
             })
             .collect();
 
+        let stored_opts = SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored);
+
         for page in pages {
-            let src_name = name_map.get(&page.filename).map(|s| s.as_str()).unwrap_or(&page.filename);
-            copy_entry(&mut src, &mut dst, src_name)?;
+            if let Some(ref src_path) = page.source_path {
+                // New page not yet in the CBZ — read from filesystem
+                let mut data = Vec::new();
+                File::open(src_path)
+                    .with_context(|| format!("Neue Seite öffnen: {}", src_path))?
+                    .read_to_end(&mut data)?;
+                dst.start_file(&page.filename, stored_opts)?;
+                dst.write_all(&data)?;
+            } else {
+                let src_name = name_map.get(&page.filename).map(|s| s.as_str()).unwrap_or(&page.filename);
+                copy_entry(&mut src, &mut dst, src_name)?;
+            }
         }
 
         // Copy non-image, non-ComicInfo entries (e.g. credits.txt)
@@ -210,7 +229,7 @@ pub fn add_pages(path: &str, image_paths: &[String]) -> Result<Vec<PageInfo>> {
             File::open(img_path)?.read_to_end(&mut data)?;
             dst.start_file(&entry_name, opts)?;
             dst.write_all(&data)?;
-            added.push(PageInfo { filename: entry_name, index: 0, page_type: None, double_page: None });
+            added.push(PageInfo { filename: entry_name, index: 0, page_type: None, double_page: None, source_path: None });
         }
         dst.finish()?;
     }
@@ -218,25 +237,31 @@ pub fn add_pages(path: &str, image_paths: &[String]) -> Result<Vec<PageInfo>> {
     Ok(added)
 }
 
-/// Extracts one image from the CBZ and returns it as a base64 data URL.
-/// Only the matching entry is read — the rest of the archive is untouched.
-pub fn get_page_thumbnail(cbz_path: &str, filename: &str) -> Result<String> {
-    let file = File::open(cbz_path).context("Datei öffnen")?;
-    let mut archive = ZipArchive::new(file).context("ZIP öffnen")?;
-
-    // Find full entry name by basename
-    let entry_name: Option<String> = (0..archive.len()).find_map(|i| {
-        let e = archive.by_index(i).ok()?;
-        let name = e.name().to_owned();
-        let base = name.rsplit('/').next().unwrap_or(&name).to_owned();
-        if base == filename { Some(name) } else { None }
-    });
-    let entry_name = entry_name
-        .ok_or_else(|| anyhow::anyhow!("Seite nicht gefunden: {}", filename))?;
-
-    let mut entry = archive.by_name(&entry_name)?;
-    let mut bytes = Vec::new();
-    entry.read_to_end(&mut bytes)?;
+/// Returns a page as a base64 data URL.
+/// `source_path` is set for pages not yet written into the CBZ (pending additions).
+pub fn get_page_thumbnail(cbz_path: &str, filename: &str, source_path: Option<&str>) -> Result<String> {
+    let bytes = if let Some(src) = source_path {
+        // Page not yet in archive — read directly from filesystem
+        let mut data = Vec::new();
+        File::open(src).with_context(|| format!("Vorschau-Datei öffnen: {}", src))?
+            .read_to_end(&mut data)?;
+        data
+    } else {
+        let file = File::open(cbz_path).context("Datei öffnen")?;
+        let mut archive = ZipArchive::new(file).context("ZIP öffnen")?;
+        let entry_name: Option<String> = (0..archive.len()).find_map(|i| {
+            let e = archive.by_index(i).ok()?;
+            let name = e.name().to_owned();
+            let base = name.rsplit('/').next().unwrap_or(&name).to_owned();
+            if base == filename { Some(name) } else { None }
+        });
+        let entry_name = entry_name
+            .ok_or_else(|| anyhow::anyhow!("Seite nicht gefunden: {}", filename))?;
+        let mut entry = archive.by_name(&entry_name)?;
+        let mut data = Vec::new();
+        entry.read_to_end(&mut data)?;
+        data
+    };
 
     let ext = filename.rsplit('.').next().unwrap_or("jpg").to_lowercase();
     let mime = match ext.as_str() {
@@ -246,45 +271,52 @@ pub fn get_page_thumbnail(cbz_path: &str, filename: &str) -> Result<String> {
         "avif" => "image/avif",
         _      => "image/jpeg",
     };
-
     use base64::Engine;
-    let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
-    Ok(format!("data:{};base64,{}", mime, b64))
+    Ok(format!("data:{};base64,{}", mime, base64::engine::general_purpose::STANDARD.encode(&bytes)))
 }
 
 /// Extracts a subset of pages from a CBZ into `dest_dir`.
-/// Returns the list of written file paths.
-pub fn extract_pages(cbz_path: &str, filenames: &[String], dest_dir: &str) -> Result<Vec<String>> {
-    let file = File::open(cbz_path).context("CBZ öffnen")?;
-    let mut archive = ZipArchive::new(file).context("ZIP öffnen")?;
-
-    // Build basename → full entry-name map
-    let name_map: HashMap<String, String> = (0..archive.len())
-        .filter_map(|i| {
-            let e = archive.by_index(i).ok()?;
-            let name = e.name().to_owned();
-            if is_image(&name.to_lowercase()) {
-                let base = name.rsplit('/').next().unwrap_or(&name).to_owned();
-                Some((base, name))
-            } else {
-                None
-            }
-        })
-        .collect();
-
+/// Pages with `source_path` set (pending additions) are copied directly from disk.
+pub fn extract_pages(cbz_path: &str, pages: &[PageInfo], dest_dir: &str) -> Result<Vec<String>> {
     let dest = std::path::Path::new(dest_dir);
     fs::create_dir_all(dest).context("Zielordner anlegen")?;
 
-    let mut written: Vec<String> = Vec::new();
-    for basename in filenames {
-        let entry_name = name_map.get(basename).map(|s| s.as_str()).unwrap_or(basename);
-        let mut entry = match archive.by_name(entry_name) {
-            Ok(e) => e,
-            Err(_) => continue,
-        };
-        let out_path = dest.join(basename);
-        let mut out_file = File::create(&out_path).context("Ausgabedatei erstellen")?;
-        std::io::copy(&mut entry, &mut out_file)?;
+    // Only open the archive if we actually need it
+    let needs_archive = pages.iter().any(|p| p.source_path.is_none());
+    let mut archive_opt: Option<ZipArchive<File>> = if needs_archive {
+        let f = File::open(cbz_path).context("CBZ öffnen")?;
+        Some(ZipArchive::new(f).context("ZIP öffnen")?)
+    } else {
+        None
+    };
+
+    let name_map: HashMap<String, String> = if let Some(ref mut a) = archive_opt {
+        (0..a.len())
+            .filter_map(|i| {
+                let e = a.by_index(i).ok()?;
+                let name = e.name().to_owned();
+                if is_image(&name.to_lowercase()) {
+                    let base = name.rsplit('/').next().unwrap_or(&name).to_owned();
+                    Some((base, name))
+                } else { None }
+            })
+            .collect()
+    } else {
+        HashMap::new()
+    };
+
+    let mut written = Vec::new();
+    for page in pages {
+        let out_path = dest.join(&page.filename);
+        if let Some(ref src) = page.source_path {
+            fs::copy(src, &out_path).with_context(|| format!("Kopieren von {}", src))?;
+        } else if let Some(ref mut archive) = archive_opt {
+            let entry_name = name_map.get(&page.filename).map(|s| s.as_str()).unwrap_or(&page.filename);
+            if let Ok(mut entry) = archive.by_name(entry_name) {
+                let mut out = File::create(&out_path).context("Ausgabedatei")?;
+                std::io::copy(&mut entry, &mut out)?;
+            } else { continue; }
+        }
         written.push(out_path.to_string_lossy().into_owned());
     }
     Ok(written)
