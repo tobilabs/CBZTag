@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { store } from "../store";
@@ -15,15 +15,19 @@ interface TooltipState {
 }
 
 export function PageEditor({ file }: Props) {
-  // Ref for the actual value used in onDrop — avoids stale-closure bugs
-  // when React batches the re-render after onDragStart.
-  const draggingRef                 = useRef<number | null>(null);
-  const [dragging, setDragging]     = useState<number | null>(null); // visual only
-  const [dragOver, setDragOver]     = useState<number | null>(null);
-  const [selected, setSelected]     = useState<Set<number>>(new Set());
-  const [tooltip, setTooltip]       = useState<TooltipState | null>(null);
-  const thumbnailCache              = useRef<Map<string, string>>(new Map());
-  const hoverTimer                  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [selected, setSelected]   = useState<Set<number>>(new Set());
+  const [tooltip, setTooltip]     = useState<TooltipState | null>(null);
+  const [dragOver, setDragOver]   = useState<number | null>(null);
+  const thumbnailCache            = useRef<Map<string, string>>(new Map());
+  const hoverTimer                = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Pointer-based drag state ──────────────────────────────────────────────
+  const draggingIdx   = useRef<number | null>(null);
+  const pointerOrigin = useRef<{ y: number } | null>(null);
+  const listRef       = useRef<HTMLDivElement>(null);
+
+  // Clean up pointer capture on unmount
+  useEffect(() => () => { draggingIdx.current = null; }, []);
 
   // ── Thumbnail ────────────────────────────────────────────────────────────
 
@@ -32,16 +36,11 @@ export function PageEditor({ file }: Props) {
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
       const TOOLTIP_W = 228;
       const TOOLTIP_H = 320;
-      // Show to the left of the panel; clamp so it doesn't go above the viewport
       const x = rect.left - TOOLTIP_W - 8;
       const y = Math.min(rect.top, window.innerHeight - TOOLTIP_H - 8);
 
-      // Show immediately from cache, otherwise wait 120 ms before fetching
       const cached = thumbnailCache.current.get(filename);
-      if (cached) {
-        setTooltip({ dataUrl: cached, x, y });
-        return;
-      }
+      if (cached) { setTooltip({ dataUrl: cached, x, y }); return; }
 
       hoverTimer.current = setTimeout(async () => {
         try {
@@ -53,12 +52,10 @@ export function PageEditor({ file }: Props) {
           });
           thumbnailCache.current.set(filename, dataUrl);
           setTooltip({ dataUrl, x, y });
-        } catch {
-          // Silently ignore — no thumbnail shown
-        }
+        } catch { /* ignore */ }
       }, 120);
     },
-    [file.path]
+    [file.path, file.pages]
   );
 
   const handleMouseLeave = useCallback(() => {
@@ -80,27 +77,50 @@ export function PageEditor({ file }: Props) {
     });
   }
 
-  // ── Drag & Drop ──────────────────────────────────────────────────────────
+  // ── Pointer drag ─────────────────────────────────────────────────────────
 
-  function handleDragStart(index: number) {
-    draggingRef.current = index;
-    setDragging(index);
+  function rowIndexFromY(clientY: number): number | null {
+    if (!listRef.current) return null;
+    const children = Array.from(listRef.current.children) as HTMLElement[];
+    for (let i = 0; i < children.length; i++) {
+      const r = children[i].getBoundingClientRect();
+      if (clientY < r.bottom) return i;
+    }
+    return children.length - 1;
+  }
+
+  function handlePointerDown(e: React.PointerEvent, i: number) {
+    // Only drag via the handle or when not clicking interactive elements
+    const tag = (e.target as HTMLElement).tagName;
+    if (tag === "SELECT" || tag === "INPUT") return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    draggingIdx.current = i;
+    pointerOrigin.current = { y: e.clientY };
     setTooltip(null);
   }
 
-  function handleDragOver(e: React.DragEvent, index: number) {
+  function handlePointerMove(e: React.PointerEvent) {
+    if (draggingIdx.current === null) return;
     e.preventDefault();
-    setDragOver(index);
+    const over = rowIndexFromY(e.clientY);
+    setDragOver(over);
   }
 
-  function handleDrop(toIndex: number) {
-    const from = draggingRef.current;
-    if (from !== null && from !== toIndex) {
-      store.reorderPages(file.id, from, toIndex);
-      setSelected(new Set([toIndex]));
+  function handlePointerUp(e: React.PointerEvent) {
+    const from = draggingIdx.current;
+    const to   = rowIndexFromY(e.clientY);
+    draggingIdx.current  = null;
+    pointerOrigin.current = null;
+    setDragOver(null);
+    if (from !== null && to !== null && from !== to) {
+      store.reorderPages(file.id, from, to);
+      setSelected(new Set([to]));
     }
-    draggingRef.current = null;
-    setDragging(null);
+  }
+
+  function handlePointerCancel() {
+    draggingIdx.current  = null;
+    pointerOrigin.current = null;
     setDragOver(null);
   }
 
@@ -109,20 +129,14 @@ export function PageEditor({ file }: Props) {
   async function handleExtract() {
     const selectedPages = file.pages.filter((_, i) => selected.has(i));
     if (selectedPages.length === 0) return;
-
     const destDir = await open({ directory: true, title: "Zielordner wählen" });
     if (typeof destDir !== "string") return;
-
     try {
       const written: string[] = await invoke("extract_pages", {
-        path: file.path,
-        pages: selectedPages,
-        destDir,
+        path: file.path, pages: selectedPages, destDir,
       });
       alert(`${written.length} Seite(n) extrahiert nach:\n${destDir}`);
-    } catch (e) {
-      alert(`Fehler beim Extrahieren:\n${e}`);
-    }
+    } catch (e) { alert(`Fehler:\n${e}`); }
   }
 
   async function handleAddPages() {
@@ -132,7 +146,7 @@ export function PageEditor({ file }: Props) {
     });
     if (!result) return;
     const paths = Array.isArray(result) ? result : [result];
-    await store.addPages(file.id, paths);
+    store.addPages(file.id, paths);
   }
 
   function handleRemove() {
@@ -152,12 +166,8 @@ export function PageEditor({ file }: Props) {
 
   return (
     <div className="page-editor">
-      {/* Thumbnail tooltip — rendered outside scroll container */}
       {tooltip && (
-        <div
-          className="thumb-tooltip"
-          style={{ left: tooltip.x, top: tooltip.y }}
-        >
+        <div className="thumb-tooltip" style={{ left: tooltip.x, top: tooltip.y }}>
           <img src={tooltip.dataUrl} alt="" />
         </div>
       )}
@@ -167,12 +177,8 @@ export function PageEditor({ file }: Props) {
         <div className="page-actions">
           {selected.size > 0 && (
             <>
-              <button onClick={handleExtract}>
-                ↓ Extrahieren ({selected.size})
-              </button>
-              <button onClick={handleRemove} className="danger">
-                {selected.size} entfernen
-              </button>
+              <button onClick={handleExtract}>↓ Extrahieren ({selected.size})</button>
+              <button onClick={handleRemove} className="danger">{selected.size} entfernen</button>
             </>
           )}
           <button onClick={handleAddPages}>+ Hinzufügen</button>
@@ -187,22 +193,24 @@ export function PageEditor({ file }: Props) {
         <span className="col-drag" />
       </div>
 
-      <div className="page-list">
+      <div
+        className="page-list"
+        ref={listRef}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
+      >
         {file.pages.map((page, i) => (
           <div
             key={page.filename}
             className={[
               "page-row",
-              dragging === i   ? "dragging"  : "",
-              dragOver === i   ? "drag-over" : "",
-              selected.has(i)  ? "selected"  : "",
+              draggingIdx.current === i ? "dragging"  : "",
+              dragOver === i            ? "drag-over" : "",
+              selected.has(i)           ? "selected"  : "",
             ].filter(Boolean).join(" ")}
             onClick={(e) => toggleSelect(i, e)}
-            draggable
-            onDragStart={() => handleDragStart(i)}
-            onDragOver={(e) => handleDragOver(e, i)}
-            onDrop={() => handleDrop(i)}
-            onDragEnd={() => { setDragging(null); setDragOver(null); }}
+            onPointerDown={(e) => handlePointerDown(e, i)}
             onMouseEnter={(e) => handleMouseEnter(page.filename, e)}
             onMouseLeave={handleMouseLeave}
           >
@@ -215,9 +223,7 @@ export function PageEditor({ file }: Props) {
               onChange={(e) => handleTypeChange(i, e.target.value)}
             >
               <option value="">—</option>
-              {PAGE_TYPES.map((t) => (
-                <option key={t} value={t}>{t}</option>
-              ))}
+              {PAGE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
             <input
               type="checkbox"
@@ -239,24 +245,13 @@ export function PageEditor({ file }: Props) {
           display: flex; flex-direction: column; height: 100%; overflow: hidden; position: relative;
         }
         .thumb-tooltip {
-          position: fixed;
-          z-index: 1000;
-          pointer-events: none;
-          background: var(--surface);
-          border: 1px solid var(--border);
-          border-radius: 6px;
-          padding: 4px;
+          position: fixed; z-index: 1000; pointer-events: none;
+          background: var(--surface); border: 1px solid var(--border);
+          border-radius: 6px; padding: 4px;
           box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-          max-width: 220px;
-          animation: fadeIn 0.1s ease;
+          max-width: 220px; animation: fadeIn 0.1s ease;
         }
-        .thumb-tooltip img {
-          display: block;
-          max-width: 210px;
-          max-height: 300px;
-          border-radius: 3px;
-          object-fit: contain;
-        }
+        .thumb-tooltip img { display: block; max-width: 210px; max-height: 300px; border-radius: 3px; object-fit: contain; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
         .page-editor-header {
           display: flex; align-items: center; justify-content: space-between;
@@ -276,18 +271,18 @@ export function PageEditor({ file }: Props) {
         .page-row {
           display: flex; align-items: center; padding: 2px 10px;
           border-bottom: 1px solid var(--border);
-          font-size: 12px; cursor: pointer; user-select: none; gap: 4px;
+          font-size: 12px; user-select: none; gap: 4px;
+          cursor: grab; touch-action: none;
         }
-        .page-row:hover { background: var(--row-hover); }
+        .page-row:hover   { background: var(--row-hover); }
         .page-row.selected { background: var(--row-selected); }
-        .page-row.dragging { opacity: 0.35; }
+        .page-row.dragging { opacity: 0.4; cursor: grabbing; }
         .page-row.drag-over { border-top: 2px solid var(--accent); }
-        .col-num { width: 28px; flex-shrink: 0; text-align: right; color: var(--text-muted); font-size: 11px; }
+        .col-num  { width: 28px; flex-shrink: 0; text-align: right; color: var(--text-muted); font-size: 11px; }
         .col-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 4px; }
         .col-type { width: 104px; flex-shrink: 0; font-size: 11px; padding: 1px 3px; cursor: pointer; }
-        .col-dp { width: 22px; flex-shrink: 0; text-align: center; cursor: pointer; accent-color: var(--accent); }
-        .col-drag { width: 18px; flex-shrink: 0; color: var(--text-muted); font-size: 14px; cursor: grab; text-align: center; }
-        .drag-handle { user-select: none; }
+        .col-dp   { width: 22px; flex-shrink: 0; text-align: center; cursor: pointer; accent-color: var(--accent); }
+        .col-drag { width: 18px; flex-shrink: 0; color: var(--text-muted); font-size: 14px; text-align: center; }
         .page-empty { padding: 24px; text-align: center; color: var(--text-muted); font-size: 12px; }
       `}</style>
     </div>

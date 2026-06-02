@@ -3,28 +3,53 @@ import { store } from "../store";
 import { ComicFile } from "../types";
 
 interface Props {
-  files: ComicFile[];   // already-filtered selected files, in current table order
+  files: ComicFile[];
   onClose: () => void;
 }
 
 export function NumberingModal({ files, onClose }: Props) {
-  const [order, setOrder]       = useState<ComicFile[]>(files);
-  const [start, setStart]       = useState("1");
-  const draggingRef             = useRef<number | null>(null);
-  const [dragging, setDragging] = useState<number | null>(null);
+  const [order, setOrder] = useState<ComicFile[]>(files);
+  const [start, setStart] = useState("1");
   const [dragOver, setDragOver] = useState<number | null>(null);
+  const draggingIdx = useRef<number | null>(null);
+  const listRef     = useRef<HTMLDivElement>(null);
 
-  function handleDrop(toIdx: number) {
-    const from = draggingRef.current;
-    if (from !== null && from !== toIdx) {
+  const startNum = parseInt(start, 10);
+  const preview  = order.map((_, i) => isNaN(startNum) ? "?" : String(startNum + i));
+
+  function rowIndexFromY(clientY: number): number | null {
+    if (!listRef.current) return null;
+    const children = Array.from(listRef.current.children) as HTMLElement[];
+    // skip header row (first child)
+    for (let i = 1; i < children.length; i++) {
+      const r = children[i].getBoundingClientRect();
+      if (clientY < r.bottom) return i - 1;
+    }
+    return children.length - 2;
+  }
+
+  function handlePointerDown(e: React.PointerEvent, i: number) {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    draggingIdx.current = i;
+  }
+
+  function handlePointerMove(e: React.PointerEvent) {
+    if (draggingIdx.current === null) return;
+    e.preventDefault();
+    setDragOver(rowIndexFromY(e.clientY));
+  }
+
+  function handlePointerUp(e: React.PointerEvent) {
+    const from = draggingIdx.current;
+    const to   = rowIndexFromY(e.clientY);
+    draggingIdx.current = null;
+    setDragOver(null);
+    if (from !== null && to !== null && from !== to) {
       const next = [...order];
       const [moved] = next.splice(from, 1);
-      next.splice(toIdx, 0, moved);
+      next.splice(to, 0, moved);
       setOrder(next);
     }
-    draggingRef.current = null;
-    setDragging(null);
-    setDragOver(null);
   }
 
   function apply() {
@@ -32,9 +57,6 @@ export function NumberingModal({ files, onClose }: Props) {
     store.applyNumbering(order.map((f) => f.id), startNum);
     onClose();
   }
-
-  const startNum = parseInt(start, 10);
-  const preview  = order.map((_, i) => isNaN(startNum) ? "?" : String(startNum + i));
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -48,16 +70,19 @@ export function NumberingModal({ files, onClose }: Props) {
           <div className="start-row">
             <label>Startzahl</label>
             <input
-              type="number"
-              value={start}
-              min={0}
-              style={{ width: 80 }}
+              type="number" value={start} min={0} style={{ width: 80 }}
               onChange={(e) => setStart(e.target.value)}
             />
             <span className="hint">Reihenfolge per Drag & Drop anpassen</span>
           </div>
 
-          <div className="num-list">
+          <div
+            className="num-list"
+            ref={listRef}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={() => { draggingIdx.current = null; setDragOver(null); }}
+          >
             <div className="num-list-header">
               <span className="nl-num">#</span>
               <span className="nl-name">Dateiname</span>
@@ -69,14 +94,10 @@ export function NumberingModal({ files, onClose }: Props) {
                 key={file.id}
                 className={[
                   "num-row",
-                  dragging === i   ? "dragging"  : "",
-                  dragOver  === i  ? "drag-over" : "",
+                  draggingIdx.current === i ? "dragging"  : "",
+                  dragOver === i            ? "drag-over" : "",
                 ].filter(Boolean).join(" ")}
-                draggable
-                onDragStart={() => { draggingRef.current = i; setDragging(i); }}
-                onDragOver={(e) => { e.preventDefault(); setDragOver(i); }}
-                onDrop={() => handleDrop(i)}
-                onDragEnd={() => { setDragging(null); setDragOver(null); }}
+                onPointerDown={(e) => handlePointerDown(e, i)}
               >
                 <span className="nl-num">{preview[i]}</span>
                 <span className="nl-name" title={file.filename}>{file.filename}</span>
@@ -110,19 +131,11 @@ export function NumberingModal({ files, onClose }: Props) {
           padding: 12px 16px; border-bottom: 1px solid var(--border);
           font-weight: 600; font-size: 13px; flex-shrink: 0;
         }
-        .modal-close {
-          background: transparent; color: var(--text-muted); font-size: 14px;
-          padding: 2px 6px;
-        }
+        .modal-close { background: transparent; color: var(--text-muted); font-size: 14px; padding: 2px 6px; }
         .modal-close:hover { background: var(--row-hover); color: var(--text); }
         .modal-body { flex: 1; overflow: hidden; display: flex; flex-direction: column; padding: 12px 16px; gap: 10px; }
-        .modal-footer {
-          display: flex; justify-content: flex-end; gap: 8px;
-          padding: 10px 16px; border-top: 1px solid var(--border); flex-shrink: 0;
-        }
-        .start-row {
-          display: flex; align-items: center; gap: 10px; flex-shrink: 0;
-        }
+        .modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--border); flex-shrink: 0; }
+        .start-row { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
         .start-row label { font-size: 12px; color: var(--text-muted); }
         .start-row .hint { font-size: 11px; color: var(--text-muted); margin-left: auto; font-style: italic; }
         .num-list { flex: 1; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px; }
@@ -130,16 +143,16 @@ export function NumberingModal({ files, onClose }: Props) {
           display: flex; align-items: center; padding: 3px 8px; gap: 6px;
           background: var(--surface2); border-bottom: 1px solid var(--border);
           font-size: 10px; font-weight: 700; color: var(--text-muted);
-          text-transform: uppercase; user-select: none; flex-shrink: 0;
+          text-transform: uppercase; user-select: none;
         }
         .num-row {
           display: flex; align-items: center; padding: 4px 8px; gap: 6px;
           border-bottom: 1px solid var(--border); font-size: 12px;
-          cursor: grab; user-select: none;
+          cursor: grab; user-select: none; touch-action: none;
         }
         .num-row:last-child { border-bottom: none; }
-        .num-row:hover { background: var(--row-hover); }
-        .num-row.dragging { opacity: 0.35; }
+        .num-row:hover     { background: var(--row-hover); }
+        .num-row.dragging  { opacity: 0.4; cursor: grabbing; }
         .num-row.drag-over { border-top: 2px solid var(--accent); }
         .nl-num    { width: 36px; flex-shrink: 0; font-weight: 600; color: var(--accent); text-align: right; }
         .nl-name   { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
