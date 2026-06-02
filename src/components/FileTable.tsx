@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { store, useStore } from "../store";
 import { ComicMeta, SortField, SortDir } from "../types";
 
@@ -75,15 +75,14 @@ export function FileTable() {
   }
 
   // ── Sort ───────────────────────────────────────────────────────────────────
-  const sorted = [...files].sort((a, b) => {
+  const sorted = useMemo(() => [...files].sort((a, b) => {
     const av = a.meta[sortField] ?? "";
     const bv = b.meta[sortField] ?? "";
-    // Empty values always sink to the bottom regardless of direction
     if (av === "" && bv === "") return 0;
     if (av === "") return 1;
     if (bv === "") return -1;
     return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
-  });
+  }), [files, sortField, sortDir]);
 
   function handleSort(key: SortField) {
     if (key === sortField) setSortDir((d) => (d === "asc" ? "desc" : "asc"));

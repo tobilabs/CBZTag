@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import type { DirEntry } from "@tauri-apps/plugin-fs";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readDir } from "@tauri-apps/plugin-fs";
@@ -38,7 +38,9 @@ export default function App() {
   const dirtyCount    = files.filter((f) => f.dirty).length;
 
   // Auto-switch to meta when multi-select makes pages tab unavailable
-  if (panel === "pages" && !singleFile) setPanel("meta");
+  useEffect(() => {
+    if (panel === "pages" && !singleFile) setPanel("meta");
+  }, [panel, singleFile]);
 
   const handleOpenFiles = useCallback(async () => {
     const result = await open({

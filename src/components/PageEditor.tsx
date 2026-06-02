@@ -21,6 +21,9 @@ export function PageEditor({ file }: Props) {
   const [dragOver, setDragOver]   = useState<number | null>(null);
   const thumbnailCache            = useRef<Map<string, string>>(new Map());
   const hoverTimer                = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Stable ref for pages so handleMouseEnter doesn't recreate on every page-list change
+  const pagesRef                  = useRef(file.pages);
+  pagesRef.current                = file.pages;
 
   // ── Pointer-based drag state ──────────────────────────────────────────────
   const draggingIdx   = useRef<number | null>(null);
@@ -47,7 +50,7 @@ export function PageEditor({ file }: Props) {
 
       hoverTimer.current = setTimeout(async () => {
         try {
-          const page = file.pages.find((p) => p.filename === filename);
+          const page = pagesRef.current.find((p) => p.filename === filename);
           const dataUrl: string = await invoke("get_page_thumbnail", {
             path: file.path,
             filename,
@@ -58,7 +61,7 @@ export function PageEditor({ file }: Props) {
         } catch { /* ignore */ }
       }, 120);
     },
-    [file.path, file.pages]
+    [file.path]   // file.pages accessed via pagesRef to avoid dep churn
   );
 
   const handleMouseLeave = useCallback(() => {

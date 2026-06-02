@@ -17,9 +17,11 @@ export interface StoreSnapshot {
 
 class Store {
   files: ComicFile[] = [];
+  /** O(1) lookup by id — kept in sync with `files` on every mutation. */
+  private fileMap = new Map<string, ComicFile>();
   selected: Set<string> = new Set();
   status: StatusInfo | null = null;
-  snapshot: StoreSnapshot = { files: this.files, selected: this.selected, status: null };
+  snapshot: StoreSnapshot = { files: [], selected: this.selected, status: null };
   private listeners: Set<Listener> = new Set();
 
   subscribe(fn: Listener) {
@@ -37,9 +39,17 @@ class Store {
     this.notify();
   }
 
+  private get(id: string): ComicFile | undefined {
+    return this.fileMap.get(id);
+  }
+
+  // ── File loading ──────────────────────────────────────────────────────────
+
   async openFiles(paths: string[]) {
+    // O(1) dedup using a Set
+    const existingPaths = new Set(this.files.map((f) => f.path));
     const newEntries: ComicFile[] = paths
-      .filter((p) => !this.files.find((f) => f.path === p))
+      .filter((p) => !existingPaths.has(p))
       .map((p) => ({
         id: crypto.randomUUID(),
         path: p,
@@ -54,6 +64,7 @@ class Store {
 
     if (newEntries.length === 0) return;
 
+    newEntries.forEach((e) => this.fileMap.set(e.id, e));
     this.files = [...this.files, ...newEntries];
     const total = newEntries.length;
     let done = 0;
@@ -83,17 +94,59 @@ class Store {
     this.setStatus(null);
   }
 
+  // ── Meta mutations ────────────────────────────────────────────────────────
+
   updateMeta(id: string, meta: Partial<ComicMeta>) {
-    const file = this.files.find((f) => f.id === id);
+    const file = this.get(id);
     if (!file) return;
     file.meta = { ...file.meta, ...meta };
     file.dirty = true;
     this.notify();
   }
 
+  /** Apply a patch to multiple files at once — single notify instead of N. */
+  bulkUpdateMeta(ids: string[], meta: Partial<ComicMeta>) {
+    ids.forEach((id) => {
+      const file = this.get(id);
+      if (!file) return;
+      file.meta = { ...file.meta, ...meta };
+      file.dirty = true;
+    });
+    this.notify();
+  }
+
+  applyTransform(ids: string[], transform: (file: ComicFile) => Partial<ComicMeta>) {
+    ids.forEach((id) => {
+      const file = this.get(id);
+      if (!file) return;
+      file.meta = { ...file.meta, ...transform(file) };
+      file.dirty = true;
+    });
+    // setStatus calls notify — no separate notify needed
+    this.setStatus({
+      message: `${ids.length} Comic${ids.length !== 1 ? "s" : ""} aktualisiert`,
+      current: ids.length, total: ids.length,
+    });
+    setTimeout(() => this.setStatus(null), 2500);
+  }
+
+  applyNumbering(orderedIds: string[], startNumber: number) {
+    orderedIds.forEach((id, i) => {
+      const file = this.get(id);
+      if (!file) return;
+      file.meta = { ...file.meta, number: String(startNumber + i) };
+      file.dirty = true;
+    });
+    this.setStatus({
+      message: `${orderedIds.length} Comic${orderedIds.length !== 1 ? "s" : ""} nummeriert`,
+      current: orderedIds.length, total: orderedIds.length,
+    });
+    setTimeout(() => this.setStatus(null), 2500);
+  }
+
   applyBulkEdits(ids: string[], edits: BulkEdit[]) {
     ids.forEach((id) => {
-      const file = this.files.find((f) => f.id === id);
+      const file = this.get(id);
       if (!file) return;
       edits.forEach(({ field, value }) => {
         (file.meta as Record<string, string>)[field] = value;
@@ -103,36 +156,14 @@ class Store {
     this.notify();
   }
 
+  // ── Discard ───────────────────────────────────────────────────────────────
+
   discardFile(id: string) {
-    const file = this.files.find((f) => f.id === id);
+    const file = this.get(id);
     if (!file) return;
     file.meta = { ...file.originalMeta };
     file.pages = file.originalPages.map((p) => ({ ...p }));
     file.dirty = false;
-    this.notify();
-  }
-
-  applyTransform(ids: string[], transform: (file: ComicFile) => Partial<ComicMeta>) {
-    ids.forEach((id) => {
-      const file = this.files.find((f) => f.id === id);
-      if (!file) return;
-      file.meta = { ...file.meta, ...transform(file) };
-      file.dirty = true;
-    });
-    this.setStatus({ message: `${ids.length} Comic${ids.length !== 1 ? "s" : ""} aktualisiert`, current: ids.length, total: ids.length });
-    setTimeout(() => this.setStatus(null), 2500);
-    this.notify();
-  }
-
-  applyNumbering(orderedIds: string[], startNumber: number) {
-    orderedIds.forEach((id, i) => {
-      const file = this.files.find((f) => f.id === id);
-      if (!file) return;
-      file.meta = { ...file.meta, number: String(startNumber + i) };
-      file.dirty = true;
-    });
-    this.setStatus({ message: `${orderedIds.length} Comic${orderedIds.length !== 1 ? "s" : ""} nummeriert`, current: orderedIds.length, total: orderedIds.length });
-    setTimeout(() => this.setStatus(null), 2500);
     this.notify();
   }
 
@@ -145,8 +176,10 @@ class Store {
     this.notify();
   }
 
+  // ── Page mutations ────────────────────────────────────────────────────────
+
   reorderPages(id: string, fromIndex: number, toIndex: number) {
-    const file = this.files.find((f) => f.id === id);
+    const file = this.get(id);
     if (!file) return;
     const pages = [...file.pages];
     const [moved] = pages.splice(fromIndex, 1);
@@ -157,7 +190,7 @@ class Store {
   }
 
   updatePage(id: string, pageIndex: number, patch: Partial<PageEntry>) {
-    const file = this.files.find((f) => f.id === id);
+    const file = this.get(id);
     if (!file) return;
     file.pages = file.pages.map((p, i) => i === pageIndex ? { ...p, ...patch } : p);
     file.dirty = true;
@@ -165,7 +198,7 @@ class Store {
   }
 
   removePages(id: string, pageIndices: number[]) {
-    const file = this.files.find((f) => f.id === id);
+    const file = this.get(id);
     if (!file) return;
     const set = new Set(pageIndices);
     file.pages = file.pages
@@ -176,7 +209,7 @@ class Store {
   }
 
   addPages(id: string, imagePaths: string[]) {
-    const file = this.files.find((f) => f.id === id);
+    const file = this.get(id);
     if (!file) return;
     const newPages: PageEntry[] = imagePaths.map((p, i) => ({
       filename: p.replace(/\\/g, "/").split("/").pop() ?? p,
@@ -188,13 +221,14 @@ class Store {
     this.notify();
   }
 
+  // ── Save ──────────────────────────────────────────────────────────────────
+
   async saveFile(id: string) {
-    const file = this.files.find((f) => f.id === id);
+    const file = this.get(id);
     if (!file || !file.dirty) return;
 
     await invoke("save_cbz", { path: file.path, meta: file.meta, pages: file.pages });
 
-    // Reload from disk so the displayed data reflects exactly what was written
     try {
       const result: { meta: ComicMeta; pages: PageEntry[] } = await invoke("load_cbz", { path: file.path });
       file.meta          = result.meta;
@@ -202,7 +236,6 @@ class Store {
       file.pages         = result.pages;
       file.originalPages = result.pages.map((p) => ({ ...p }));
     } catch {
-      // Reload failed — keep in-memory state as baseline
       file.originalMeta  = { ...file.meta };
       file.originalPages = file.pages.map((p) => ({ ...p }));
     }
@@ -223,13 +256,19 @@ class Store {
       done++;
       this.setStatus({ message: "Speichere…", current: done, total: dirty.length });
     }
-    this.setStatus({ message: `${dirty.length} Comic${dirty.length !== 1 ? "s" : ""} gespeichert`, current: dirty.length, total: dirty.length });
+    this.setStatus({
+      message: `${dirty.length} Comic${dirty.length !== 1 ? "s" : ""} gespeichert`,
+      current: dirty.length, total: dirty.length,
+    });
     setTimeout(() => this.setStatus(null), 2500);
   }
 
+  // ── List management ───────────────────────────────────────────────────────
+
   removeFiles(ids: string[]) {
-    this.files = this.files.filter((f) => !ids.includes(f.id));
-    ids.forEach((id) => this.selected.delete(id));
+    const set = new Set(ids);
+    this.files = this.files.filter((f) => !set.has(f.id));
+    ids.forEach((id) => { this.fileMap.delete(id); this.selected.delete(id); });
     this.notify();
   }
 

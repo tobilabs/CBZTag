@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { store } from "../store";
 import { ComicFile, ComicMeta } from "../types";
 
@@ -86,8 +86,8 @@ export function MetaEditor({ files }: Props) {
   const isMulti = files.length > 1;
   const [local, setLocal] = useState<Partial<ComicMeta>>({});
 
-  // Recompute local state when selection changes
-  const selectionKey = files.map((f) => f.id).join(",");
+  const selectionKey = useMemo(() => files.map((f) => f.id).join(","), [files]);
+
   useEffect(() => {
     const m: Partial<ComicMeta> = {};
     FIELDS.forEach(({ key }) => {
@@ -99,7 +99,8 @@ export function MetaEditor({ files }: Props) {
 
   function handleChange(key: keyof ComicMeta, value: string) {
     setLocal((m) => ({ ...m, [key]: value }));
-    files.forEach((f) => store.updateMeta(f.id, { [key]: value }));
+    // bulkUpdateMeta applies to all selected files with a single notify
+    store.bulkUpdateMeta(files.map((f) => f.id), { [key]: value });
   }
 
   function handleDiscard() {
