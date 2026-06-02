@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { store } from "../store";
 import { ComicFile, ComicMeta } from "../types";
 
@@ -84,9 +85,34 @@ interface Props { files: ComicFile[] }
 
 export function MetaEditor({ files }: Props) {
   const isMulti = files.length > 1;
-  const [local, setLocal] = useState<Partial<ComicMeta>>({});
+  const [local, setLocal]       = useState<Partial<ComicMeta>>({});
+  const [thumb, setThumb]       = useState<string | null>(null);
+  const thumbCache              = useRef<Map<string, string>>(new Map());
 
   const selectionKey = useMemo(() => files.map((f) => f.id).join(","), [files]);
+
+  // Load cover thumbnail for single selection
+  useEffect(() => {
+    if (isMulti) { setThumb(null); return; }
+    const file  = files[0];
+    const cover = file.pages[0];
+    if (!cover) { setThumb(null); return; }
+
+    const cacheKey = `${file.id}:${cover.filename}`;
+    const cached   = thumbCache.current.get(cacheKey);
+    if (cached) { setThumb(cached); return; }
+
+    setThumb(null);
+    invoke<string>("get_page_thumbnail", {
+      path: file.path,
+      filename: cover.filename,
+      sourcePath: cover.sourcePath ?? null,
+    }).then((url) => {
+      thumbCache.current.set(cacheKey, url);
+      setThumb(url);
+    }).catch(() => setThumb(null));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectionKey]);
 
   useEffect(() => {
     const m: Partial<ComicMeta> = {};
@@ -118,12 +144,16 @@ export function MetaEditor({ files }: Props) {
 
   return (
     <div className="meta-editor">
-      {isMulti && (
+      {isMulti ? (
         <div className="bulk-banner">
           <span>✦ Bulk-Edit — {files.length} Dateien ausgewählt</span>
           <span className="bulk-hint">Änderungen gelten für alle markierten Dateien</span>
         </div>
-      )}
+      ) : thumb ? (
+        <div className="cover-thumb">
+          <img src={thumb} alt="Cover" />
+        </div>
+      ) : null}
       <div className="meta-header">
         <span className="meta-title">
           {isMulti ? `${files.length} Dateien` : files[0].filename}
@@ -175,6 +205,21 @@ export function MetaEditor({ files }: Props) {
       </div>
       <style>{`
         .meta-editor { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+        .cover-thumb {
+          flex-shrink: 0;
+          background: #0d0d1a;
+          border-bottom: 1px solid var(--border);
+          display: flex; align-items: center; justify-content: center;
+          padding: 10px;
+          max-height: 220px; overflow: hidden;
+        }
+        .cover-thumb img {
+          max-height: 200px;
+          max-width: 100%;
+          object-fit: contain;
+          border-radius: 3px;
+          box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+        }
         .bulk-banner {
           display: flex; flex-direction: column; gap: 2px;
           padding: 6px 12px; background: #1a2a3e;
